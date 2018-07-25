@@ -4,6 +4,7 @@ pragma solidity ^0.4.24;
 /**
  * @title SafeMath
  * @dev Math operations with safety checks that throw on error
+ * https://github.com/OpenZeppelin/openzeppelin-solidity
  */
 library SafeMath {
 
@@ -13,7 +14,6 @@ library SafeMath {
       function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
         // Gas optimization: this is cheaper than asserting 'a' not being zero, but the
         // benefit is lost if 'b' is also tested.
-        // See: https://github.com/OpenZeppelin/openzeppelin-solidity/pull/522
         if (a == 0) {
           return 0;
         }
@@ -50,43 +50,38 @@ library SafeMath {
         return c;
       }
     
-    /**
-     * @dev gives square root of given x.
-     */
-    function sqrt(uint256 x)
-        internal
-        pure
-        returns (uint256 y) 
-    {
-        uint256 z = ((add(x,1)) / 2);
-        y = x;
-        while (z < y) 
-        {
-            y = z;
-            z = ((add((x / z),z)) / 2);
-        }
-    }
+    // /**
+    //  * @dev calculates square root of given number.
+    //  */
+    // function sqrt(uint256 x) internal pure returns (uint256 y) 
+    // {
+    //     uint256 z = ((add(x,1)) / 2);
+    //     y = x;
+    //     while (z < y) {
+    //         y = z;
+    //         z = ((add((x / z),z)) / 2);
+    //     }
+    // }
     
-    /**
-     * @dev x to the power of y 
-     */
-    function power(uint256 x, uint256 y)
-        internal 
-        pure 
-        returns (uint256)
-    {
-        if (x==0)
-            return (0);
-        else if (y==0)
-            return (1);
-        else 
-        {
-            uint256 z = x;
-            for (uint256 i=1; i < y; i++)
-                z = mul(z,x);
-            return (z);
-        }
-    }
+    // /**
+    //  * @dev calculates x to the power of y 
+    //  */
+    // function power(uint256 x, uint256 y) internal pure returns (uint256) {
+    //     if (x==0){
+    //         return (0);
+    //      }
+    //     else if (y==0){
+    //         return (1);
+    //      }
+    //     else 
+    //     {
+    //         uint256 z = x;
+    //         for (uint256 i=1; i < y; i++){
+    //             z = mul(z,x);
+    //      }
+    //         return (z);
+    //     }
+    // }
 }
 
 /**
@@ -156,7 +151,7 @@ contract Ownable {
 ///////////////   starts here ! //////////////////////////////
 /////////////////////////////////////////////////////////////
 /**
- * @author Author GitHub: https://github.com/1994wyh-WYH
+ * @author whatever you hear 
  */
  
 contract Game is Ownable {
@@ -258,7 +253,11 @@ contract Game is Ownable {
         currRID = 0;
     }
     
-    function withdraw() public onlyOwner {
+    /**
+     * @dev only allow withdraw after a round has ended.
+     */
+    function withdraw() public onlyOwner hasLaunched {
+        require(isCurrRoundEnded());
         owner.transfer((address(this)).balance); 
     }
     
@@ -382,6 +381,9 @@ contract Game is Ownable {
      * @dev for checking if a game has ended.
      */
     function isCurrRoundEnded() public view returns (bool) {
+        if(currRID == 0){
+            return false;
+        }
         return now >= rounds[currRID].end;
     }
     
