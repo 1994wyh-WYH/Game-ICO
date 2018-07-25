@@ -384,14 +384,15 @@ contract Game is Ownable {
      function AKeysOf(uint256 _quantity) public view returns (uint256) {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
-        lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
-        while(_quantity - lastBKeyPrice) {
+        lastAKeyPrice = lastAKeyPrice.mul(18).div(1000000);
+        while(_quantity - lastAKeyPrice > 0) {
             ret = ret + 1;
-            lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
+            _quantity = _quantity - lastAKeyPrice;
+            lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
         }
-        if(_quantity > lastBKeyPrice / 2) {
+        if(_quantity > lastAKeyPrice / 2) {
             ret = ret + 1;
-            lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
+            lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
         }
         
         return ret;
@@ -404,13 +405,14 @@ contract Game is Ownable {
      function BKeysOf(uint256 _quantity) public view returns (uint256) {
         uint256 ret = 0;
         lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
-        while(_quantity - lastBKeyPrice) {
+        while(_quantity - lastBKeyPrice > 0) {
             ret = ret + 1;
-            lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
+            _quantity = _quantity - lastBKeyPrice;
+            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
         }
         if(_quantity > lastBKeyPrice / 2) {
             ret = ret + 1;
-            lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
+            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
         }
         if(ret < 1){
             ret = 1;
@@ -428,25 +430,24 @@ contract Game is Ownable {
      */
     function endRound() public onlyOwner {
         // TODO: update roun info?
-        // TODO: set all players info to defaults!!
+        
         // do not update curr RID!!
         
         Round memory currRound = rounds[RID];
         currRound.hasBeenEnded = true;
         // TODO: pay dividends
-        // TODO: pay rewards
+        for(int i = 1; i <= lastPID; i++) {
+            
+        }
         
+        // TODO: pay rewards
+        payPlayersB();
         
         checkAndPayLastPlayer();
+        // TODO: set all players info to defaults!!
         
         // for consistency
         uint256 _now = now;
-        
-        // 2 scenarios: last round has ended; you are still in a round
-        /////////////////
-        // if (_now >= game.lastPressedTime.add(remaining_time_right_after_last_full_press)) {
-        if(isCurrRoundEnded()){
-        //Round ended or not started
         
         //foundation withdraw
         withdraw(pot.mul(reservedPercent).div(100));
