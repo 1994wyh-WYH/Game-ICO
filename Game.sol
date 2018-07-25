@@ -163,7 +163,7 @@ contract Game is Ownable {
     uint256 public lastAKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
     uint256 public lastBKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
     
-    uint256 public launchTime; // ? to be decided
+    uint256 public launchTime = 10; // ? to be decided
     
     uint256 public countdown = 43200; // 12 h countdown cap
     uint256 public increaseStep = 120; // Increase 2 minutes per purchase of a full A key
@@ -223,6 +223,9 @@ contract Game is Ownable {
     // fire when end time got updated 
     event EndUpdate(uint256 newEnd);
     
+    // fire for the front end to deal with upon receiving any transaction
+    event PaymentReceived(address sender, uint256 value);
+    
     
     /**
      * @dev sets boundaries for incoming eth (per payment) in wei
@@ -270,7 +273,16 @@ contract Game is Ownable {
     function() public payable checkBoundaries(msg.value) {
         // do nothing before actual launch of the game
         if(now < launchTime) return;
-        
+        // UI catch and deal with payment
+        emit PaymentReceived(msg.sender, msg.value);
+    }
+    
+    /**
+     * @dev Helper for dealing with any incoming tx.
+     * @param sender The payer
+     * @param value The amount sent to contract
+     */
+    function dealWithPay(address sender, uint256 value) public onlyOwner hasLaunched {
         // for time consistency throughout the function
         uint256 _now = now;
 
@@ -292,7 +304,7 @@ contract Game is Ownable {
                 // End curr round
                 // Start a new round!
                 startRound();
-                updateAndPay(msg.sender, msg.value);
+                updateAndPay(sender, value);
             }
             else{
                 //do nothing during cool down time. Payments ignored.
@@ -301,9 +313,9 @@ contract Game is Ownable {
         ////////////////////////////////////////////////////////////////////////
         //if hasn't ended yet, that is, curr round still active
         else{
-            uint256 aKeys2 = AKeysOf(msg.value); //store amount of A keys first
+            uint256 aKeys2 = AKeysOf(value); //store amount of A keys first
             // update and pay
-            updateAndPay(msg.sender, msg.value);
+            updateAndPay(sender, value);
             // update round end time
             if(aKeys2 >= 100){
                 //if purchased a full key
@@ -321,7 +333,6 @@ contract Game is Ownable {
                 // no update of end time
             }
         }
-        
     }
     
     
