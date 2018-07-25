@@ -492,10 +492,10 @@ contract Game is Ownable {
     function startRound() public onlyOwner hasLaunched {
         // do not start until actual launchTime
         // check and return without doing anything if not ready to start
-        require(rounds[currRID].end + roundInterval <= now);
+        require(rounds[currRID].end + roundInterval <= now || currRID == 0);
         
         // check if last round has ended. If not, need to end last round first
-        if(!rounds[currRID].hasBeenEnded){
+        if((currRID!=0) && (!rounds[currRID].hasBeenEnded)){
             endRound();
         }
         //update parameters
