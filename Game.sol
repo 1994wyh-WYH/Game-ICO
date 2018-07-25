@@ -214,14 +214,7 @@ contract Game is Ownable {
         // uint256 lastPressRemainingTime; // time interval
         bool hasBeenEnded;
     }
-    
-    // direct deposit already, still needed?
-    // // fire whenever pays a player
-    // event Pay
-    // (
-    //     address playerAddress,
-    //     uint256 amount
-    // );
+
     
     // fire when assigns dividends
     event DividendsIncr(address player, uint256 amount);
@@ -244,6 +237,14 @@ contract Game is Ownable {
         require(amount >= 100000000000000); // 1/10000 eth minimum, least pay for 0.01 actual key
         require(amount <= 1000000000000000000000); // 1000 eth maximum
         _;    
+    }
+    
+    /**
+     * @dev check if has passed launch time
+     */
+    modifier hasLaunched() {
+        require(now >= launchTime);
+        _;
     }
     
     /**
@@ -327,10 +328,11 @@ contract Game is Ownable {
     
     /**
      * @dev Helper function to update round info upon payment.
+     * payPlayersA called inside.
      * @param _account The account made the payment
      * @param _amount Amount of the payment
      */
-     function updateAndPay(address _account, uint256 _amount) private {
+     function updateAndPay(address _account, uint256 _amount) private hasLaunched {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
             uint256 aKeys = AKeysOf(_amount);
@@ -341,7 +343,7 @@ contract Game is Ownable {
                 Player memory p = Player ({
                     //init default
                     PID: lastPID + 1, 
-                    account: msg.sender,
+                    account: _account,
                     AKeys: aKeys,
                     BKeys: bKeys,
                     lastAKeys: aKeys,
@@ -387,14 +389,14 @@ contract Game is Ownable {
      * @dev calculates the number of A keys given amount of eth in wei.
      * @param _quantity The amount of eth paid
      */
-     function AKeysOf(uint256 _quantity) public returns (uint256) {
+     function AKeysOf(uint256 _quantity) private hasLaunched returns (uint256) {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
         lastAKeyPrice = lastAKeyPrice.mul(18).div(1000000);
         while(_quantity - lastAKeyPrice >= 0) {
-            ret = ret + 1;
             _quantity = _quantity - lastAKeyPrice;
             lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
+            ret = ret + 1;
         }
         // if left money greater than half of the next key price,
         // count as 1
@@ -411,13 +413,13 @@ contract Game is Ownable {
      * NOTE: Limits minimum price to 1 to avoid crash.
      * @param _quantity The amount of eth paid
      */
-     function BKeysOf(uint256 _quantity) public returns (uint256) {
+     function BKeysOf(uint256 _quantity) private hasLaunched returns (uint256) {
         uint256 ret = 0;
         lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
         while(_quantity - lastBKeyPrice >= 0) {
-            ret = ret + 1;
             _quantity = _quantity - lastBKeyPrice;
-            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
+            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000); 
+            ret = ret + 1;
         }
         // if left money greater than half of the next key price,
         // count as 1        
@@ -441,6 +443,7 @@ contract Game is Ownable {
      * Foundation withdraw.
      */
     function endRound() public onlyOwner {
+        require(now >= rounds[currRID].end);
         // update round info? no, except hasBeenEnded
         
         // do not update curr RID!!
@@ -473,7 +476,11 @@ contract Game is Ownable {
      * @dev starts a new round.
      * NOTE: not set start to 'now' but the estimated time based on last end.
      */
-    function startRound() public onlyOwner {
+    function startRound() public onlyOwner hasLaunched {
+        // do not start until actual launchTime
+        // check and return without doing anything if not ready to start
+        require(rounds[currRID].end + roundInterval <= now);
+        
         // check if last round has ended. If not, need to end last round first
         if(!rounds[currRID].hasBeenEnded){
             endRound();
@@ -507,7 +514,7 @@ contract Game is Ownable {
      * NOTE: Earnings will all be sent to players at the END of each round.
      * @param _amount Amount to to divided.
      */
-    function payPlayersA(uint256 _amount) public onlyOwner {
+    function payPlayersA(uint256 _amount) public onlyOwner hasLaunched {
         Round storage r = rounds[currRID]; //view, no need to be memory
         for(uint256 i = 1; i <= lastPID; i++){
             // fetch Player
@@ -524,7 +531,7 @@ contract Game is Ownable {
      * Sends the earnings to players.
      * Rewards paid at final stage of each round.
      */
-    function payPlayersB() public onlyOwner {
+    function payPlayersB() public onlyOwner hasLaunched {
         Round storage r = rounds[currRID];
         for(uint256 i = 1; i <= lastPID; i++){
             // fetch Player
@@ -540,7 +547,7 @@ contract Game is Ownable {
      * @dev Checks if the last player is eligible for last-player reward.
      * If so, pay the player.
      */
-     function checkAndPayLastPlayer() public onlyOwner {
+     function checkAndPayLastPlayer() public onlyOwner hasLaunched {
         // check if last round has ended. If not, need to end last round first
         if(!rounds[currRID].hasBeenEnded){
             endRound();
