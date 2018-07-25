@@ -405,7 +405,7 @@ contract Game is Ownable {
      function AKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
-        lastAKeyPrice = lastAKeyPrice.mul(18).div(1000000);
+        lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
         while(_quantity - lastAKeyPrice >= 0) {
             _quantity = _quantity - lastAKeyPrice;
             lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
@@ -428,7 +428,7 @@ contract Game is Ownable {
      */
      function BKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
-        lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
+        lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
         while(_quantity - lastBKeyPrice >= 0) {
             _quantity = _quantity - lastBKeyPrice;
             lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000); 
