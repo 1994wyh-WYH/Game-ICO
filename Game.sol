@@ -3,11 +3,39 @@ pragma solidity ^0.4.24;
 
 /**
  * @title SafeMath
- * @dev Math operations with safety checks that throw on error
- * https://github.com/OpenZeppelin/openzeppelin-solidity
+ * @dev Math operations with safety checks and PREVENTS throws
+ * Inspired by https://github.com/OpenZeppelin/openzeppelin-solidity
+ * Modified by author
  */
 library SafeMath {
-
+    
+    /**
+      * @dev Subtracts two numbers, NO throws on overflow 
+      * if subtrahend is greater than intended, just return 0.
+      */
+      function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        if(b >= a) return 0;
+        return a - b;
+      }
+    
+      /**
+      * @dev Adds two numbers, NO throws on overflow.
+      * Return the greater one if overflows
+      */
+      function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
+        c = a + b;
+        if (c <= a) {
+            if(a > b) {
+                return a;
+            }
+            else{
+                return b;
+            }
+        }
+        return c;
+      }
+      
+      
       /**
       * @dev Multiplies two numbers, throws on overflow.
       */
@@ -28,60 +56,13 @@ library SafeMath {
       */
       function div(uint256 a, uint256 b) internal pure returns (uint256) {
         // assert(b > 0); // Solidity automatically throws when dividing by 0
-        // uint256 c = a / b;
-        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+        uint256 c = a / b;
+        if(c > a){
+            return a;
+        }
         return a / b;
       }
-    
-      /**
-      * @dev Subtracts two numbers, throws on overflow (i.e. if subtrahend is greater than minuend).
-      */
-      function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        assert(b <= a);
-        return a - b;
-      }
-    
-      /**
-      * @dev Adds two numbers, throws on overflow.
-      */
-      function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
-        c = a + b;
-        assert(c >= a);
-        return c;
-      }
-    
-    // /**
-    //  * @dev calculates square root of given number.
-    //  */
-    // function sqrt(uint256 x) internal pure returns (uint256 y) 
-    // {
-    //     uint256 z = ((add(x,1)) / 2);
-    //     y = x;
-    //     while (z < y) {
-    //         y = z;
-    //         z = ((add((x / z),z)) / 2);
-    //     }
-    // }
-    
-    // /**
-    //  * @dev calculates x to the power of y 
-    //  */
-    // function power(uint256 x, uint256 y) internal pure returns (uint256) {
-    //     if (x==0){
-    //         return (0);
-    //      }
-    //     else if (y==0){
-    //         return (1);
-    //      }
-    //     else 
-    //     {
-    //         uint256 z = x;
-    //         for (uint256 i=1; i < y; i++){
-    //             z = mul(z,x);
-    //      }
-    //         return (z);
-    //     }
-    // }
+
 }
 
 /**
@@ -191,7 +172,7 @@ contract Game is Ownable {
         uint256 AKeys; // set to 0 upon paying dividends
         uint256 BKeys; // only cleared at final stage
         uint256 lastAKeys; // A keys given upon last payment. NOTE: needs to be >= 1 to be eligible for last-player big-fat reward.
-        uint256 AEarning; // cumulated dividends obtained
+        uint256 AEarning; // cumulated dividends obtained, can be claimed at anytime
         // uint256 BEarning; // calculated finally 
     }
     
@@ -200,6 +181,7 @@ contract Game is Ownable {
         uint256 totalAKeys;
         uint256 totalBKeys;
         uint256 pot; // all 3 pots add up to (address(this)).balance ?
+        uint256 dividends; //needs to claim by oneself
         uint256 foundationReserved; 
         uint256 lastPlayerReward; // dynamically grow as more wager goes in
         address lastPlayer; // keeps changing as new payments goes in
@@ -214,6 +196,9 @@ contract Game is Ownable {
     // fire when assigns dividends
     event DividendsIncr(address player, uint256 amount);
     
+    // fire when one claims his/her dividends
+    event DividendsPaid(address player, uint256 amount);
+    
     // fire when last winner is confirmed to be valid
     event GetLastWinner(address last);
     
@@ -226,6 +211,9 @@ contract Game is Ownable {
     // fire for the front end to deal with upon receiving any transaction
     event PaymentReceived(address sender, uint256 value);
     
+    // fire when final stage transfer is made
+    event RewardsClear(address player, uint256 rewards);
+    
     
     /**
      * @dev sets boundaries for incoming eth (per payment) in wei
@@ -233,7 +221,7 @@ contract Game is Ownable {
      */
     modifier checkBoundaries(uint256 amount) {
         require(amount >= 100000000000000); // 1/10000 eth minimum, least pay for 0.01 actual key
-        require(amount <= 1000000000000000000000); // 1000 eth maximum
+        require(amount <= 10000000000000000000); // 10 eth maximum
         _;    
     }
     
@@ -304,7 +292,7 @@ contract Game is Ownable {
                 // End curr round
                 // Start a new round!
                 startRound();
-                updateAndPay(sender, value);
+                updateAndRecalc(sender, value);
             }
             else{
                 //do nothing during cool down time. Payments ignored.
@@ -315,7 +303,7 @@ contract Game is Ownable {
         else{
             uint256 aKeys2 = AKeysOf(value); //store amount of A keys first
             // update and pay
-            updateAndPay(sender, value);
+            updateAndRecalc(sender, value);
             // update round end time
             if(aKeys2 >= 100){
                 //if purchased a full key
@@ -342,7 +330,7 @@ contract Game is Ownable {
      * @param _account The account made the payment
      * @param _amount Amount of the payment
      */
-     function updateAndPay(address _account, uint256 _amount) private hasLaunched {
+     function updateAndRecalc(address _account, uint256 _amount) private hasLaunched {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
             uint256 aKeys = AKeysOf(_amount);
@@ -374,7 +362,8 @@ contract Game is Ownable {
             
             // assign dividends
             uint256 toPay = ((_amount).mul(ARewardPercent)).div(100);
-            payPlayersA(toPay);
+            // update A's total dividends
+            currRound.dividends = (currRound.dividends).add(toPay);
             
             //update round info     
             currRound.foundationReserved = currRound.foundationReserved + (_amount).mul(reservedPercent).div(100);
@@ -405,17 +394,17 @@ contract Game is Ownable {
      function AKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
-        lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
-        while(_quantity - lastAKeyPrice >= 0) {
-            _quantity = _quantity - lastAKeyPrice;
-            lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
-            ret = ret + 1;
+        lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
+        while(_quantity.sub(lastAKeyPrice) >= 1) {
+            _quantity = _quantity.sub(lastAKeyPrice);
+            lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
+            ret = ret.add(1);
         }
         // if left money greater than half of the next key price,
         // count as 1
-        if(_quantity > lastAKeyPrice / 2) {
-            ret = ret + 1;
-            lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
+        if(_quantity > lastAKeyPrice.div(2)) {
+            ret = ret.add(1);
+            lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
         }
         
         return ret;
@@ -428,17 +417,17 @@ contract Game is Ownable {
      */
      function BKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
-        lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
-        while(_quantity - lastBKeyPrice >= 0) {
-            _quantity = _quantity - lastBKeyPrice;
-            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000); 
-            ret = ret + 1;
+        lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000);
+        while(_quantity.sub(lastBKeyPrice) >= 1) {
+            _quantity = _quantity.sub(lastBKeyPrice);
+            lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000); 
+            ret = ret.add(1);
         }
         // if left money greater than half of the next key price,
         // count as 1        
-        if(_quantity > lastBKeyPrice / 2) {
-            ret = ret + 1;
-            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
+        if(_quantity > lastBKeyPrice.div(2)) {
+            ret = ret.add(1);
+            lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000);
         }
         // no way to be lower than 1
         if(ret < 1){
@@ -462,24 +451,12 @@ contract Game is Ownable {
         // do not update curr RID!!
         Round memory currRound = rounds[currRID];
         currRound.hasBeenEnded = true;
-        // actually pay dividends => make tx
-        for(uint256 i = 1; i <= lastPID; i++) {
-            Player memory p = PIDToPlayers[i];
-            (p.account).transfer(p.AEarning);
-        }
         
-        // pay rewards
-        payPlayersB();
+        // ready to claim B rewards
+        // claim dividends as you want
+        
         // pay final winner
         checkAndPayLastPlayer();
-        // set all players info to defaults!!
-        for(uint256 j = 1; j <= lastPID; j++) {
-            Player memory p2 = PIDToPlayers[j];
-            p2.AEarning = 0;
-            p2.AKeys = 0;
-            p2.BKeys = 0;
-            p2.lastAKeys = 0;
-        }
        
         //foundation withdraw all eth left
         withdraw();
@@ -492,21 +469,21 @@ contract Game is Ownable {
     function startRound() public onlyOwner hasLaunched {
         // do not start until actual launchTime
         // check and return without doing anything if not ready to start
-        require(rounds[currRID].end + roundInterval <= now || currRID == 0);
+        require((rounds[currRID].end).add(roundInterval) <= now || currRID == 0);
         
         // check if last round has ended. If not, need to end last round first
         if((currRID!=0) && (!rounds[currRID].hasBeenEnded)){
             endRound();
         }
         //update parameters
-        currRID ++;
+        currRID.add(1);
         lastAKeyPrice = initBKeyPrice;
         lastBKeyPrice = initBKeyPrice;
         //set a new round
         uint256 newStart;
         // launch the first game or use previous data to set start/end time
         if(currRID > 1){
-            newStart = rounds[currRID-1].end+roundInterval;
+            newStart = (rounds[currRID-1].end).add(roundInterval);
         }
         else{
             newStart = now;
@@ -516,6 +493,7 @@ contract Game is Ownable {
             totalAKeys: 0,
             totalBKeys: 0,
             pot: 0,
+            dividends: 0,
             foundationReserved: 0,
             lastPlayerReward: 0,
             lastPlayer: address(0x0),
@@ -530,37 +508,78 @@ contract Game is Ownable {
     
     
     /**
-     * @dev Helper function to pay all players dividends. 
+     * @dev can be called by anyone to calc a player's dividends. 
      * Cumulate specified earnings to players. Update info.
      * NOTE: Earnings will all be sent to players at the END of each round.
-     * @param _amount Amount to to divided.
+     * @param playerAddr Address of the player to be queried.
      */
-    function payPlayersA(uint256 _amount) public onlyOwner hasLaunched {
+    function calcDividends(address playerAddr) public hasLaunched {
         Round storage r = rounds[currRID]; //view, no need to be memory
-        for(uint256 i = 1; i <= lastPID; i++){
-            // fetch Player
-            Player memory p = PIDToPlayers[i];
-            uint256 dividends = (_amount).mul(p.AKeys).div(r.totalAKeys);
-            p.AEarning = p.AEarning + dividends;
-            
-            emit DividendsIncr(p.account, p.AEarning);
-        }
+        // fetch Player
+        Player memory p = PIDToPlayers[addrToPID[playerAddr]];
+        uint256 divi = (r.dividends).mul(p.AKeys).div(r.totalAKeys);
+        p.AEarning = divi;
+        
+        emit DividendsIncr(p.account, p.AEarning);
     }
     
     /**
-     * @dev Helper function to pay all players with the pot.
-     * Sends the earnings to players.
+     * @dev can be called by anyone to withdraw dividends balance.
+     * Clears balance.
+     */
+    function withdrawDividends() public hasLaunched {
+        //do nothing if not a valid registered player
+        if(addrToPID[msg.sender] == 0) return;
+        
+        // fetch Player
+        Player memory p = PIDToPlayers[addrToPID[msg.sender]];
+        uint256 toSend = p.AEarning; // for proper serialization
+        p.AEarning = 0;
+        (p.account).transfer(toSend);
+            
+        emit DividendsPaid(p.account, p.AEarning);
+    }
+    
+    /**
+     * @dev for players to claim their final B rewards after game ends.
+     * NOTE: dividends will be claimed AS WELL !!
+     * Sends the ALL earnings to players.
      * Rewards paid at final stage of each round.
      */
-    function payPlayersB() public onlyOwner hasLaunched {
-        Round storage r = rounds[currRID];
-        for(uint256 i = 1; i <= lastPID; i++){
-            // fetch Player
-            Player memory p = PIDToPlayers[i];
-            uint256 rewards = (r.pot).mul(p.BKeys).div(r.totalBKeys);
-            // actually pays the player automatically!
-            (p.account).transfer(rewards);
+    function claimBReward() public hasLaunched {
+        //do nothing if not a valid registered player
+        if(addrToPID[msg.sender] == 0) {
+            return;
         }
+        //do nothing if the current round has not ended
+        if(!isCurrRoundEnded()) {
+            return;
+        }
+        
+        Round storage r = rounds[currRID];
+        //do nothing if current round has not been ended.
+        if(!r.hasBeenEnded) {
+            return;
+        }
+        
+        // fetch Player
+        Player memory p = PIDToPlayers[addrToPID[msg.sender]];
+        uint256 rewards = (r.pot).mul(p.BKeys).div(r.totalBKeys);
+        
+        // check if the player's dividends has anything left
+        calcDividends(p.account);
+        if(p.AEarning > 0){
+            rewards = rewards + p.AEarning;
+        }
+        
+        p.AEarning = 0;
+        p.AKeys = 0;
+        p.BKeys = 0;
+        p.lastAKeys = 0;   
+        
+        // actually pays the player automatically!
+        (p.account).transfer(rewards);
+         emit RewardsClear(p.account, rewards);
     }
     
     
