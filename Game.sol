@@ -163,23 +163,23 @@ contract Game is Ownable {
     using SafeMath for *;
     
     //NOTE: 100 key units = 1 actual key for purchase
-    uint256 initAKeyPrice = 100000000000000; // 0.18% up per new actual key => 0.0018% per key uint
-    uint256 initBKeyPrice = 100000000000000; // 0.18% down per new actual key => 0.0018% per key uint
-    uint256 lastAKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
-    uint256 lastBKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
+    uint256 public initAKeyPrice = 100000000000000; // 0.18% up per new actual key => 0.0018% per key uint
+    uint256 public initBKeyPrice = 100000000000000; // 0.18% down per new actual key => 0.0018% per key uint
+    uint256 public lastAKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
+    uint256 public lastBKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
     
-    uint256 launchTime; // ? to be decided
+    uint256 public launchTime; // ? to be decided
     
-    uint256 countdown = 43200; // 12 h countdown cap
-    uint256 increaseStep = 120; // Increase 2 minutes per purchase of a full A key
-    uint256 roundInterval = 600; // 10 minutes between each round
+    uint256 public countdown = 43200; // 12 h countdown cap
+    uint256 public increaseStep = 120; // Increase 2 minutes per purchase of a full A key
+    uint256 public roundInterval = 600; // 10 minutes between each round
     
-    uint256 keyDecimal = 100; // 100 key units = 1 actual key
+    uint256 public keyDecimal = 100; // 100 key units = 1 actual key
 
-    uint256 BRewardPercent = 40;
-    uint256 reservedPercent = 10;
-    uint256 ARewardPercent = 40;
-    uint256 lastPlayerPercent = 10; // BIG FAT reward for last player 
+    uint256 public BRewardPercent = 40;
+    uint256 public reservedPercent = 10;
+    uint256 public ARewardPercent = 40;
+    uint256 public lastPlayerPercent = 10; // BIG FAT reward for last player 
     
     uint256 lastPID;    // current max player ID => total # of player
     uint256 public currRID;    // current round ID => total # of rounds
