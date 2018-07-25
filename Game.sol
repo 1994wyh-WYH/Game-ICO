@@ -288,6 +288,7 @@ contract Game is Ownable {
                 //do nothing during cool down time. Payments ignored.
             }
         }
+        ////////////////////////////////////////////////////////////////////////
         //if not ended, curr round still active
         else{
             uint256 aKeys2 = AKeysOf(msg.value); //store amount of A keys first
@@ -314,7 +315,7 @@ contract Game is Ownable {
     
     
     /**
-     * @dev update round info upon payment.
+     * @dev Helper function to update round info upon payment.
      * @param _account The account made the payment
      * @param _amount Amount of the payment
      */
@@ -322,8 +323,8 @@ contract Game is Ownable {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
             uint256 aKeys = AKeysOf(_amount);
-            uint256 bKeys = BKeysOf(_amount); 
-            // give B keys with the curr value of the same amount of money paid
+            uint256 bKeys = BKeysOf(_amount); // give B keys with the curr value of the same amount of money paid
+            
             // player is new
             if(_pid == 0){
                 Player memory p = Player ({
@@ -343,8 +344,8 @@ contract Game is Ownable {
             // player exists in record
             else{
                 Player memory p2 = PIDToPlayers[_pid];
-                p2.AKeys = aKeys;
-                p2.BKeys = bKeys;
+                p2.AKeys = p2.AKeys + aKeys;
+                p2.BKeys = p2.BKeys + bKeys;
                 p2.lastAKeys = aKeys;
             }
             
@@ -357,6 +358,8 @@ contract Game is Ownable {
             currRound.pot = currRound.pot + (_amount).mul(BRewardPercent).div(100);
             currRound.lastPlayerReward = currRound.lastPlayerReward + (_amount).mul(lastPlayerPercent).div(100);
             currRound.lastPlayer = _account;
+            currRound.totalAKeys = currRound.totalAKeys + aKeys;
+            currRound.totalBKeys = currRound.totalBKeys + bKeys;
      }
     
     
@@ -375,11 +378,13 @@ contract Game is Ownable {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
         lastAKeyPrice = lastAKeyPrice.mul(18).div(1000000);
-        while(_quantity - lastAKeyPrice > 0) {
+        while(_quantity - lastAKeyPrice >= 0) {
             ret = ret + 1;
             _quantity = _quantity - lastAKeyPrice;
             lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
         }
+        // if left money greater than half of the next key price,
+        // count as 1
         if(_quantity > lastAKeyPrice / 2) {
             ret = ret + 1;
             lastAKeyPrice = lastAKeyPrice.mul((18).add(1000000)).div(1000000);
@@ -396,15 +401,18 @@ contract Game is Ownable {
      function BKeysOf(uint256 _quantity) public returns (uint256) {
         uint256 ret = 0;
         lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
-        while(_quantity - lastBKeyPrice > 0) {
+        while(_quantity - lastBKeyPrice >= 0) {
             ret = ret + 1;
             _quantity = _quantity - lastBKeyPrice;
             lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
         }
+        // if left money greater than half of the next key price,
+        // count as 1        
         if(_quantity > lastBKeyPrice / 2) {
             ret = ret + 1;
             lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(18)).div(1000000);
         }
+        // no way to be lower than 1
         if(ret < 1){
             ret = 1;
         }
@@ -423,10 +431,9 @@ contract Game is Ownable {
         // update round info? no, except hasBeenEnded
         
         // do not update curr RID!!
-        
         Round memory currRound = rounds[currRID];
         currRound.hasBeenEnded = true;
-        // pay dividends
+        // actually pay dividends => make tx
         for(uint256 i = 1; i <= lastPID; i++) {
             Player memory p = PIDToPlayers[i];
             (p.account).transfer(p.AEarning);
@@ -445,13 +452,13 @@ contract Game is Ownable {
             p2.lastAKeys = 0;
         }
        
-        //foundation withdraw
+        //foundation withdraw all eth left
         withdraw();
-        
     }
     
     /**
      * @dev starts a new round.
+     * NOTE: not set start to 'now' but the estimated time based on last end.
      */
     function startRound() public onlyOwner {
         // check if last round has ended. If not, need to end last round first
@@ -471,8 +478,8 @@ contract Game is Ownable {
             foundationReserved: 0,
             lastPlayerReward: 0,
             lastPlayer: address(0x0),
-            start: now,
-            end: now + countdown,
+            start: rounds[currRID-1].end+roundInterval,
+            end: rounds[currRID-1].end+roundInterval + countdown,
             hasBeenEnded: false
         });
         rounds[currRID] = r;
