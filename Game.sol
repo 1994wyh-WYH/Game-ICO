@@ -402,7 +402,7 @@ contract Game is Ownable {
      * @dev calculates the number of A keys given amount of eth in wei.
      * @param _quantity The amount of eth paid
      */
-     function AKeysOf(uint256 _quantity) private hasLaunched returns (uint256) {
+     function AKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
         // last key price => ALREADY USED, need to be updated before using for new calculation
         lastAKeyPrice = lastAKeyPrice.mul(18).div(1000000);
@@ -426,7 +426,7 @@ contract Game is Ownable {
      * NOTE: Limits minimum price to 1 to avoid crash.
      * @param _quantity The amount of eth paid
      */
-     function BKeysOf(uint256 _quantity) private hasLaunched returns (uint256) {
+     function BKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
         lastBKeyPrice = lastBKeyPrice.mul(18).div(1000000);
         while(_quantity - lastBKeyPrice >= 0) {
@@ -455,8 +455,8 @@ contract Game is Ownable {
      * Pays A rewards according to cumulated earnings.
      * Foundation withdraw.
      */
-    function endRound() public onlyOwner {
-        require(now >= rounds[currRID].end);
+    function endRound() public onlyOwner hasLaunched {
+        require(currRID > 0 && now >= rounds[currRID].end);
         // update round info? no, except hasBeenEnded
         
         // do not update curr RID!!
@@ -503,6 +503,14 @@ contract Game is Ownable {
         lastAKeyPrice = initBKeyPrice;
         lastBKeyPrice = initBKeyPrice;
         //set a new round
+        uint256 newStart;
+        // launch the first game or use previous data to set start/end time
+        if(currRID > 1){
+            newStart = rounds[currRID-1].end+roundInterval;
+        }
+        else{
+            newStart = now;
+        }
         Round memory r = Round({
             RID: currRID,
             totalAKeys: 0,
@@ -511,8 +519,8 @@ contract Game is Ownable {
             foundationReserved: 0,
             lastPlayerReward: 0,
             lastPlayer: address(0x0),
-            start: rounds[currRID-1].end+roundInterval,
-            end: rounds[currRID-1].end+roundInterval + countdown,
+            start: newStart,
+            end: newStart + countdown,
             hasBeenEnded: false
         });
         rounds[currRID] = r;
