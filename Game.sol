@@ -223,7 +223,17 @@ contract Game is Ownable {
     //     uint256 amount
     // );
     
+    // fire when assigns dividends
+    event DividendsIncr(address player, uint256 amount);
+    
+    // fire when last winner is confirmed to be valid
     event GetLastWinner(address last);
+    
+    // fire when pot increases
+    event PotIncr(uint256 amount);
+    
+    // fire when end time got updated 
+    event EndUpdate(uint256 newEnd);
     
     
     /**
@@ -289,7 +299,7 @@ contract Game is Ownable {
             }
         }
         ////////////////////////////////////////////////////////////////////////
-        //if not ended, curr round still active
+        //if hasn't ended yet, that is, curr round still active
         else{
             uint256 aKeys2 = AKeysOf(msg.value); //store amount of A keys first
             // update and pay
@@ -304,6 +314,7 @@ contract Game is Ownable {
                 else{
                     currRound2.end = currRound2.end + aKeys2.mul(increaseStep).div(100);
                 }
+                emit EndUpdate(currRound2.end);
             }
             else{
                 // if not a full actual key
@@ -360,6 +371,8 @@ contract Game is Ownable {
             currRound.lastPlayer = _account;
             currRound.totalAKeys = currRound.totalAKeys + aKeys;
             currRound.totalBKeys = currRound.totalBKeys + bKeys;
+            
+            emit PotIncr(currRound.pot);
      }
     
     
@@ -483,6 +496,8 @@ contract Game is Ownable {
             hasBeenEnded: false
         });
         rounds[currRID] = r;
+        
+        emit EndUpdate(r.end);
     }
     
     
@@ -499,6 +514,8 @@ contract Game is Ownable {
             Player memory p = PIDToPlayers[i];
             uint256 dividends = (_amount).mul(p.AKeys).div(r.totalAKeys);
             p.AEarning = p.AEarning + dividends;
+            
+            emit DividendsIncr(p.account, p.AEarning);
         }
     }
     
@@ -534,6 +551,7 @@ contract Game is Ownable {
         if(last.lastAKeys >= 100){
             // has a full key
             (last.account).transfer(r.lastPlayerReward);
+            
             emit GetLastWinner(last.account);
         }
         else{
