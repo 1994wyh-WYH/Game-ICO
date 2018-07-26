@@ -189,7 +189,7 @@ contract Game is Ownable {
         uint256 totalAKeys;
         uint256 totalBKeys;
         uint256 pot; // all 3 pots add up to (address(this)).balance ?
-        uint256 dividends; //needs to claim by oneself
+        // uint256 dividends; //needs to claim by oneself
         uint256 foundationReserved; 
         uint256 lastPlayerReward; // dynamically grow as more wager goes in
         address lastPlayer; // keeps changing as new payments goes in
@@ -207,6 +207,9 @@ contract Game is Ownable {
     // fire when one claims his/her dividends
     event DividendsPaid(address player, uint256 amount);
     
+    // fire for front end to catch and pay all players dividends
+    event NewDividends(uint256 amount);
+    
     // fire when last winner is confirmed to be valid
     event GetLastWinner(address last);
     
@@ -219,7 +222,8 @@ contract Game is Ownable {
     // fire for the front end to deal with upon receiving any transaction
     event PaymentReceived(address sender, uint256 value);
     
-    // fire when final stage transfer is made
+    // fire when final stage transfer is made. 
+    // can be A or B or both rewards
     event RewardsClear(address player, uint256 rewards);
     
     
@@ -234,9 +238,17 @@ contract Game is Ownable {
     }
     
     /**
-     * @dev check if has passed launch time
+     * @dev check if there has been >=1 round(s)
      */
     modifier hasLaunched() {
+        require(currRID >= 1);
+        _;
+    }
+    
+    /**
+     * @dev check if has passed launch time
+     */
+    modifier readyToLaunch() {
         require(now >= launchTime);
         _;
     }
@@ -266,9 +278,9 @@ contract Game is Ownable {
      * NOTE: Payments sent during cooling down or before launch will be ignored, 
      * that is to say, no keys given upen payment.
      */
-    function() public payable checkBoundaries(msg.value) {
-        // do nothing before actual launch of the game
-        if(now < launchTime) return;
+    function() public payable hasLaunched checkBoundaries(msg.value) {
+        // // do nothing before actual launch of the game
+        // if(now < launchTime) return;
         
         // deal with the received payment
         dealWithPay(msg.sender, msg.value);
@@ -282,7 +294,11 @@ contract Game is Ownable {
      * @param sender The payer
      * @param value The amount sent to contract
      */
-    function dealWithPay(address sender, uint256 value) public onlyOwner hasLaunched {
+    function dealWithPay(address sender, uint256 value) 
+        public 
+        onlyOwner 
+        hasLaunched 
+    {
         // for time consistency throughout the function
         uint256 _now = now;
 
@@ -320,11 +336,11 @@ contract Game is Ownable {
             if(aKeys2 >= 100){
                 //if purchased a full key
                 Round memory currRound2 = rounds[currRID];
-                if(countdown < (currRound2.end).sub(_now) + aKeys2.mul(increaseStep).div(100)){
-                    currRound2.end = _now + countdown;
+                if(countdown < ((currRound2.end).sub(_now)).add(aKeys2.mul(increaseStep).div(100))){
+                    currRound2.end = _now.add(countdown);
                 }
                 else{
-                    currRound2.end = currRound2.end + aKeys2.mul(increaseStep).div(100);
+                    currRound2.end = (currRound2.end).add(aKeys2.mul(increaseStep).div(100));
                 }
                 emit EndUpdate(currRound2.end);
             }
@@ -341,11 +357,16 @@ contract Game is Ownable {
      * @param _account The account made the payment
      * @param _amount Amount of the payment
      */
-     function updateAndRecalc(address _account, uint256 _amount) private hasLaunched {
+     function updateAndRecalc(address _account, uint256 _amount) 
+        public 
+        onlyOwner 
+        hasLaunched 
+     {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
             uint256 _aKeys = AKeysOf(_amount);
-            uint256 _bKeys = BKeysOf(_amount); // give B keys with the curr value of the same amount of money paid
+            // give B keys with the curr value of the same amount of money paid
+            uint256 _bKeys = BKeysOf(_amount); 
             
             // player is new
             if(_pid == 0){
@@ -366,23 +387,24 @@ contract Game is Ownable {
             // player exists in record
             else{
                 Player memory p2 = PIDToPlayers[_pid];
-                p2.AKeys = p2.AKeys + _aKeys;
-                p2.BKeys = p2.BKeys + _bKeys;
+                p2.AKeys = p2.AKeys.add(_aKeys);
+                p2.BKeys = p2.BKeys.add(_bKeys);
                 p2.lastAKeys = _aKeys;
             }
             
             // assign dividends
             uint256 toPay = ((_amount).mul(ARewardPercent)).div(100);
-            // update A's total dividends
-            currRound.dividends = (currRound.dividends).add(toPay);
+            // // update A's total dividends
+            // currRound.dividends = (currRound.dividends).add(toPay);
+            emit NewDividends(toPay);
             
             //update round info     
-            currRound.foundationReserved = currRound.foundationReserved + (_amount).mul(reservedPercent).div(100);
-            currRound.pot = currRound.pot + (_amount).mul(BRewardPercent).div(100);
-            currRound.lastPlayerReward = currRound.lastPlayerReward + (_amount).mul(lastPlayerPercent).div(100);
+            currRound.foundationReserved = (currRound.foundationReserved).add((_amount).mul(reservedPercent).div(100));
+            currRound.pot = (currRound.pot).add((_amount).mul(BRewardPercent).div(100));
+            currRound.lastPlayerReward = (currRound.lastPlayerReward).add((_amount).mul(lastPlayerPercent).div(100));
             currRound.lastPlayer = _account;
-            currRound.totalAKeys = currRound.totalAKeys + _aKeys;
-            currRound.totalBKeys = currRound.totalBKeys + _bKeys;
+            currRound.totalAKeys = (currRound.totalAKeys).add(_aKeys);
+            currRound.totalBKeys = (currRound.totalBKeys).add(_bKeys);
             
             emit PotIncr(currRound.pot);
      }
@@ -402,7 +424,12 @@ contract Game is Ownable {
      * @dev calculates the number of A keys given amount of eth in wei.
      * @param _quantity The amount of eth paid
      */
-     function AKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
+     function AKeysOf(uint256 _quantity) 
+        public 
+        onlyOwner 
+        hasLaunched 
+        returns (uint256) 
+    {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
         uint256 step = _quantity.div(lastAKeyPrice).div(10);
@@ -433,10 +460,15 @@ contract Game is Ownable {
      * NOTE: Limits minimum price to 1 to avoid crash.
      * @param _quantity The amount of eth paid
      */
-     function BKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
+     function BKeysOf(uint256 _quantity)    
+        public 
+        onlyOwner 
+        hasLaunched 
+        returns (uint256) 
+    {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
-        uint256 step = _quantity.div(lastAKeyPrice).div(10);
+        uint256 step = _quantity.div(lastAKeyPrice).div(6);
         if(step < 1) {
             step = 1;
         }
@@ -489,7 +521,7 @@ contract Game is Ownable {
      * @dev starts a new round.
      * NOTE: not set start to 'now' but the estimated time based on last end.
      */
-    function startRound() public onlyOwner hasLaunched {
+    function startRound() public onlyOwner readyToLaunch {
         // do not start until actual launchTime
         // check and return without doing anything if not ready to start
         require((rounds[currRID].end).add(roundInterval) <= now || currRID == 0);
@@ -499,7 +531,7 @@ contract Game is Ownable {
             endRound();
         }
         //update parameters
-        currRID.add(1);
+        currRID = currRID.add(1);
         lastAKeyPrice = initBKeyPrice;
         lastBKeyPrice = initBKeyPrice;
         //set a new round
@@ -516,12 +548,11 @@ contract Game is Ownable {
             totalAKeys: 0,
             totalBKeys: 0,
             pot: 0,
-            dividends: 0,
             foundationReserved: 0,
             lastPlayerReward: 0,
             lastPlayer: address(0x0),
             start: newStart,
-            end: newStart + countdown,
+            end: newStart.add(countdown),
             hasBeenEnded: false
         });
         rounds[currRID] = r;
@@ -535,13 +566,18 @@ contract Game is Ownable {
      * Cumulate specified earnings to players. Update info.
      * NOTE: Earnings will all be sent to players at the END of each round.
      * @param playerAddr Address of the player to be queried.
+     * @param total Total amount of dividends shared by all current players.
      */
-    function calcDividends(address playerAddr) public hasLaunched {
+    function calcDividends(address playerAddr, uint256 total) 
+        public 
+        onlyOwner 
+        hasLaunched 
+    {
         Round storage r = rounds[currRID]; //view, no need to be memory
         // fetch Player
         Player memory p = PIDToPlayers[addrToPID[playerAddr]];
-        uint256 divi = (r.dividends).mul(p.AKeys).div(r.totalAKeys);
-        p.AEarning = divi;
+        uint256 divi = (total).mul(p.AKeys).div(r.totalAKeys);
+        p.AEarning = p.AEarning.add(divi);
         
         emit DividendsIncr(p.account, p.AEarning);
     }
@@ -589,21 +625,50 @@ contract Game is Ownable {
         Player memory p = PIDToPlayers[addrToPID[msg.sender]];
         uint256 rewards = (r.pot).mul(p.BKeys).div(r.totalBKeys);
         
-        // check if the player's dividends has anything left
-        calcDividends(p.account);
-        if(p.AEarning > 0){
-            rewards = rewards + p.AEarning;
-        }
+        // // check if the player's dividends has anything left
+        // calcDividends(p.account);
+        // if(p.AEarning > 0){
+        //     rewards = rewards + p.AEarning;
+        // }
         
-        p.AEarning = 0;
-        p.AKeys = 0;
+        // p.AEarning = 0;
+        // p.AKeys = 0;
         p.BKeys = 0;
-        p.lastAKeys = 0;   
+        // p.lastAKeys = 0;   
         
         // actually pays the player automatically!
         (p.account).transfer(rewards);
          emit RewardsClear(p.account, rewards);
     }
+    
+    /**
+     * @dev automatically claims earnings for 'lazy' players after curr round ends.
+     * @param lazy The player PID. 
+     * Apparently, the author is also too lazy to think of a better var name.
+     */
+     function autoClaim(uint256 lazy) public onlyOwner hasLaunched {
+        //do nothing if the current round has not ended
+        if(!isCurrRoundEnded()) {
+            return;
+        }
+        Round storage r = rounds[currRID];
+        //do nothing if current round has not been ended.
+        if(!r.hasBeenEnded) {
+            return;
+        }
+        
+        uint256 rewards = 0;
+        rewards = rewards.add(p.AEarning).add((r.pot).mul(p.BKeys).div(r.totalBKeys));
+        
+        Player memory p = PIDToPlayers[lazy];
+        p.AEarning = 0;
+        p.AKeys = 0;
+        p.lastAKeys = 0;
+        p.BKeys = 0;
+         
+        (p.account).transfer(rewards);
+        emit RewardsClear(p.account, rewards);
+     }
     
     
     /**
