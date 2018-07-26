@@ -61,14 +61,15 @@ library SafeMath {
     
       /**
       * @dev Integer division of two numbers, truncating the quotient.
+      * Returns the first value if requirement doesn't hold.
       */
       function div(uint256 a, uint256 b) internal pure returns (uint256) {
         // assert(b > 0); // Solidity automatically throws when dividing by 0
         uint256 c = a / b;
         if(c > a){
-            return a;
+            return 1;
         }
-        return a / b;
+        return c;
       }
 
 }
@@ -147,56 +148,97 @@ contract Game is Ownable {
     using SafeMath for *;
     
     //NOTE: 100 key units = 1 actual key for purchase
-    uint256 public initAKeyPrice = 100000000000000; // 0.18% up per new actual key => 0.0018% per key uint
-    uint256 public initBKeyPrice = 100000000000000; // 0.18% down per new actual key => 0.0018% per key uint
-    uint256 public lastAKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
-    uint256 public lastBKeyPrice; // => ALREADY USED, need to be updated before using for new calculation
+    // 0.18% up per new actual key => 0.0018% per key uint
+    uint256 public initAKeyPrice = 100000000000000; 
+    // 0.18% down per new actual key => 0.0018% per key uint
+    uint256 public initBKeyPrice = 100000000000000; 
+    // => NOT USED, to be used for a new calculation
+    uint256 public lastAKeyPrice; 
+    // => NOT USED, to be used for a new calculation
+    uint256 public lastBKeyPrice; 
     
     uint256 public launchTime = 10; // ? to be decided
     
-    uint256 public countdown = 43200; // 12 h countdown cap
-    uint256 public increaseStep = 120; // Increase 2 minutes per purchase of a full A key
-    uint256 public roundInterval = 600; // 10 minutes between each round
+    // 01/01/2020 ? to be decided
+    uint256 public expirationTime = 1576800000; 
     
-    uint256 public keyDecimal = 100; // 100 key units = 1 actual key
+    // 12 h countdown cap
+    uint256 public countdown = 43200; 
+    // Increase 2 minutes per purchase of a full A key
+    uint256 public increaseStep = 120; 
+    // 10 minutes between each round
+    uint256 public roundInterval = 600; 
+    
+    // 100 key units = 1 actual key
+    uint256 public keyDecimal = 100; 
 
     uint256 public BRewardPercent = 40;
     uint256 public reservedPercent = 10;
     uint256 public ARewardPercent = 40;
-    uint256 public lastPlayerPercent = 10; // BIG FAT reward for last player 
+    // BIG FAT reward for last player 
+    uint256 public lastPlayerPercent = 10; 
     
-    uint256 lastPID;    // current max player ID => total # of player
-    uint256 public currRID;    // current round ID => total # of rounds
+    // current max player ID => total # of player
+    uint256 lastPID;    
+    // current round ID => total # of rounds
+    uint256 public currRID;    
     
-    // uint256[] players; // players eligible for B rewards. arr index => PID
-    
-    mapping (uint256 => Round) public rounds;   // RID => round data
-    mapping (address => uint256) public addrToPID; // addr => PID
-    mapping (uint256 => Player) public PIDToPlayers;   // PID => player data
+    // RID => round data
+    mapping (uint256 => Round) public rounds;   
+    // addr => PID
+    mapping (address => uint256) public addrToPID; 
+    // PID => player data
+    mapping (uint256 => Player) public PIDToPlayers;   
+    // // PID, RID => PlayerRound
+    // mapping (uint256 => (uint256 => PlayerRound)) public playerRounds; 
    
     struct Player{
         uint256 PID; // if new, assign new ID and update last PID;
         address account; //player address
+        mapping (uint256 => PlayerRound) myRounds; // RID => PlayerRound
+    }
+    
+    struct PlayerRound{
+        uint256 PID;
+        uint256 RID;
         uint256 AKeys; // set to 0 upon paying dividends
         uint256 BKeys; // only cleared at final stage
-        uint256 lastAKeys; // A keys given upon last payment. NOTE: needs to be >= 1 to be eligible for last-player big-fat reward.
-        uint256 AEarning; // cumulated dividends obtained, can be claimed at anytime
-        // uint256 BEarning; // calculated finally 
+        
+        // A keys given upon last payment. 
+        // NOTE: needs to be >= 1 to be eligible for last-player big-fat reward.
+        uint256 lastAKeys; 
+        
+        // dividends obtained after last claim, can be claimed at anytime
+        // cleared upon withdraw 
+        uint256 AEarning;
+        
+        // dividends already claimed in this round. Cumulated.
+        uint256 claimedAEarning;
+        
+        // total dividends of the round when last claimed for player dividends
+        uint256 lastClaimTotalDivi;
+        
+        // # of A keys when the player last claimed dividends
+        // used to approx real time dividends
+        uint256 lastClaimAKeys;
+        // uint256 BEarning; // calculated only at the end of round
     }
     
     struct Round{
-        uint256 RID;
+        uint256 RID; // primary key
+        
         uint256 totalAKeys;
         uint256 totalBKeys;
-        uint256 pot; // all 3 pots add up to (address(this)).balance ?
-        // uint256 dividends; //needs to claim by oneself
+        
+        uint256 pot; // all 4 pots should add up to (address(this)).balance ?
+        uint256 dividends; // needs to claim by oneself
         uint256 foundationReserved; 
         uint256 lastPlayerReward; // dynamically grow as more wager goes in
+        
         address lastPlayer; // keeps changing as new payments goes in
+        
         uint256 start;
-        uint256 end; // changing
-        // uint256 lastPressTime; // 'absolute' time
-        // uint256 lastPressRemainingTime; // time interval
+        uint256 end; // changes after start
         bool hasBeenEnded;
     }
 
@@ -207,8 +249,8 @@ contract Game is Ownable {
     // fire when one claims his/her dividends
     event DividendsPaid(address player, uint256 amount);
     
-    // fire for front end to catch and pay all players dividends
-    event NewDividends(uint256 amount);
+    // // fire for front end to catch and pay all players dividends
+    // event NewDividends(uint256 amount);
     
     // fire when last winner is confirmed to be valid
     event GetLastWinner(address last);
@@ -232,7 +274,8 @@ contract Game is Ownable {
      * @param amount Amount of eth
      */
     modifier checkBoundaries(uint256 amount) {
-        require(amount >= 100000000000000); // 1/10000 eth minimum, least pay for 0.01 actual key
+        // 1/10000 eth minimum, least pay for 0.01 actual key
+        require(amount >= 100000000000000); 
         require(amount <= 100000000000000000000); // 100 eth maximum
         _;    
     }
@@ -242,6 +285,16 @@ contract Game is Ownable {
      */
     modifier hasLaunched() {
         require(currRID >= 1);
+        _;
+    }
+    
+    /**
+     * @dev This prevents the owner of the contract from running away.
+     * 
+     */
+    modifier hasExpired() {
+        require(isCurrRoundEnded());
+        require(now >= expirationTime);
         _;
     }
     
@@ -269,7 +322,16 @@ contract Game is Ownable {
      */
     function withdraw() public onlyOwner hasLaunched {
         require(isCurrRoundEnded());
-        owner.transfer((address(this)).balance); 
+        owner.transfer(rounds[currRID].foundationReserved); 
+    }
+    
+    /**
+     * @dev only allow withdraw after the game has expired and no round is running.
+     * The foundation cannot extract left money and run until 01/01/2020.
+     */
+    function withdrawLeftover() public onlyOwner hasExpired {
+        require(isCurrRoundEnded());
+        owner.transfer(address(this).balance); 
     }
     
     /**
@@ -279,9 +341,7 @@ contract Game is Ownable {
      * that is to say, no keys given upen payment.
      */
     function() public payable hasLaunched checkBoundaries(msg.value) {
-        // // do nothing before actual launch of the game
-        // if(now < launchTime) return;
-        
+        // do nothing before actual launch of the game
         // deal with the received payment
         dealWithPay(msg.sender, msg.value);
         
@@ -370,16 +430,23 @@ contract Game is Ownable {
             
             // player is new
             if(_pid == 0){
-                Player memory p = Player ({
-                    //init default
-                    PID: lastPID + 1, 
-                    account: _account,
+                Player memory p;
+                lastPID ++;
+                p.PID = lastPID;
+                p.account = _account;
+                
+                PlayerRound memory pr = PlayerRound ({
+                    PID: lastPID,
+                    RID: currRID,
                     AKeys: _aKeys,
                     BKeys: _bKeys,
                     lastAKeys: _aKeys,
-                    AEarning: 0
+                    AEarning: 0,
+                    claimedAEarning: 0,
+                    lastClaimTotalDivi: 0,
+                    lastClaimAKeys: _aKeys
                 });
-                lastPID ++;
+                p.myRounds[currRID] = pr;
                 // update instance variables
                 PIDToPlayers[p.PID] = p;
                 addrToPID[_account] = p.PID;
@@ -387,16 +454,17 @@ contract Game is Ownable {
             // player exists in record
             else{
                 Player memory p2 = PIDToPlayers[_pid];
-                p2.AKeys = p2.AKeys.add(_aKeys);
-                p2.BKeys = p2.BKeys.add(_bKeys);
-                p2.lastAKeys = _aKeys;
+                PlayerRound memory pr2 = p2.myRounds[currRID];
+                pr2.AKeys = pr2.AKeys.add(_aKeys);
+                pr2.BKeys = pr2.BKeys.add(_bKeys);
+                pr2.lastAKeys = _aKeys;
             }
             
             // assign dividends
             uint256 toPay = ((_amount).mul(ARewardPercent)).div(100);
-            // // update A's total dividends
-            // currRound.dividends = (currRound.dividends).add(toPay);
-            emit NewDividends(toPay);
+            // update A's total dividends
+            currRound.dividends = (currRound.dividends).add(toPay);
+            //emit NewDividends(toPay);
             
             //update round info     
             currRound.foundationReserved = (currRound.foundationReserved).add((_amount).mul(reservedPercent).div(100));
@@ -468,7 +536,7 @@ contract Game is Ownable {
     {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
-        uint256 step = _quantity.div(lastAKeyPrice).div(6);
+        uint256 step = _quantity.div(lastAKeyPrice).div(10);
         if(step < 1) {
             step = 1;
         }
@@ -547,10 +615,11 @@ contract Game is Ownable {
             RID: currRID,
             totalAKeys: 0,
             totalBKeys: 0,
+            dividends: 0,
             pot: 0,
             foundationReserved: 0,
             lastPlayerReward: 0,
-            lastPlayer: address(0x0),
+            lastPlayer: address(0),
             start: newStart,
             end: newStart.add(countdown),
             hasBeenEnded: false
@@ -585,15 +654,21 @@ contract Game is Ownable {
     /**
      * @dev can be called by anyone to withdraw dividends balance.
      * Clears balance.
+     * @param _rid Round ID from which the dividends to be withdraw.
      */
-    function withdrawDividends() public hasLaunched {
+    function withdrawDividends(uint256 _rid) public hasLaunched {
         //do nothing if not a valid registered player
         if(addrToPID[msg.sender] == 0) return;
         
         // fetch Player
         Player memory p = PIDToPlayers[addrToPID[msg.sender]];
+        //fetch round
+        Round storage r = rounds[currRID]; //view, no need to be memory
+        
         uint256 toSend = p.AEarning; // for proper serialization
         p.AEarning = 0;
+        p.claimedAEarning = p.claimedAEarning.add(toSend);
+        p.last
         (p.account).transfer(toSend);
             
         emit DividendsPaid(p.account, p.AEarning);
@@ -601,11 +676,12 @@ contract Game is Ownable {
     
     /**
      * @dev for players to claim their final B rewards after game ends.
-     * NOTE: dividends will be claimed AS WELL !!
+     * @param _rid Round ID from which the rewards to be withdraw.
+     * NOTE: dividends in this round will be claimed AS WELL !!
      * Sends the ALL earnings to players.
      * Rewards paid at final stage of each round.
      */
-    function claimBReward() public hasLaunched {
+    function claimRewards(uint256 _rid) public hasLaunched {
         //do nothing if not a valid registered player
         if(addrToPID[msg.sender] == 0) {
             return;
