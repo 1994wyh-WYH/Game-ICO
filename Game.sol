@@ -10,8 +10,8 @@ pragma solidity ^0.4.24;
 library SafeMath {
     
     /**
-      * @dev Subtracts two numbers, NO throws on overflow 
-      * if subtrahend is greater than intended, just return 0.
+      * @dev Subtracts two numbers, NO throws on overflow. 
+      * If subtrahend is greater than intended, just return 0.
       */
       function sub(uint256 a, uint256 b) internal pure returns (uint256) {
         if(b >= a) return 0;
@@ -20,7 +20,7 @@ library SafeMath {
     
       /**
       * @dev Adds two numbers, NO throws on overflow.
-      * Return the greater one if overflows
+      * Return the greater one if overflows.
       */
       function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
         c = a + b;
@@ -37,7 +37,8 @@ library SafeMath {
       
       
       /**
-      * @dev Multiplies two numbers, throws on overflow.
+      * @dev Multiplies two numbers, NO throws on overflow.
+      * Return the greater one if overflow.
       */
       function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
         // Gas optimization: this is cheaper than asserting 'a' not being zero, but the
@@ -47,7 +48,14 @@ library SafeMath {
         }
     
         c = a * b;
-        assert(c / a == b);
+        if(c / a != b) {
+            if(a > b) {
+                return a;
+            }
+            else{
+                return b;
+            }
+        }
         return c;
       }
     
@@ -221,7 +229,7 @@ contract Game is Ownable {
      */
     modifier checkBoundaries(uint256 amount) {
         require(amount >= 100000000000000); // 1/10000 eth minimum, least pay for 0.01 actual key
-        require(amount <= 10000000000000000000); // 10 eth maximum
+        require(amount <= 100000000000000000000); // 100 eth maximum
         _;    
     }
     
@@ -261,6 +269,10 @@ contract Game is Ownable {
     function() public payable checkBoundaries(msg.value) {
         // do nothing before actual launch of the game
         if(now < launchTime) return;
+        
+        // deal with the received payment
+        dealWithPay(msg.sender, msg.value);
+        
         // UI catch and deal with payment
         emit PaymentReceived(msg.sender, msg.value);
     }
@@ -326,15 +338,14 @@ contract Game is Ownable {
     
     /**
      * @dev Helper function to update round info upon payment.
-     * payPlayersA called inside.
      * @param _account The account made the payment
      * @param _amount Amount of the payment
      */
      function updateAndRecalc(address _account, uint256 _amount) private hasLaunched {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
-            uint256 aKeys = AKeysOf(_amount);
-            uint256 bKeys = BKeysOf(_amount); // give B keys with the curr value of the same amount of money paid
+            uint256 _aKeys = AKeysOf(_amount);
+            uint256 _bKeys = BKeysOf(_amount); // give B keys with the curr value of the same amount of money paid
             
             // player is new
             if(_pid == 0){
@@ -342,9 +353,9 @@ contract Game is Ownable {
                     //init default
                     PID: lastPID + 1, 
                     account: _account,
-                    AKeys: aKeys,
-                    BKeys: bKeys,
-                    lastAKeys: aKeys,
+                    AKeys: _aKeys,
+                    BKeys: _bKeys,
+                    lastAKeys: _aKeys,
                     AEarning: 0
                 });
                 lastPID ++;
@@ -355,9 +366,9 @@ contract Game is Ownable {
             // player exists in record
             else{
                 Player memory p2 = PIDToPlayers[_pid];
-                p2.AKeys = p2.AKeys + aKeys;
-                p2.BKeys = p2.BKeys + bKeys;
-                p2.lastAKeys = aKeys;
+                p2.AKeys = p2.AKeys + _aKeys;
+                p2.BKeys = p2.BKeys + _bKeys;
+                p2.lastAKeys = _aKeys;
             }
             
             // assign dividends
@@ -370,8 +381,8 @@ contract Game is Ownable {
             currRound.pot = currRound.pot + (_amount).mul(BRewardPercent).div(100);
             currRound.lastPlayerReward = currRound.lastPlayerReward + (_amount).mul(lastPlayerPercent).div(100);
             currRound.lastPlayer = _account;
-            currRound.totalAKeys = currRound.totalAKeys + aKeys;
-            currRound.totalBKeys = currRound.totalBKeys + bKeys;
+            currRound.totalAKeys = currRound.totalAKeys + _aKeys;
+            currRound.totalBKeys = currRound.totalBKeys + _bKeys;
             
             emit PotIncr(currRound.pot);
      }
@@ -393,20 +404,27 @@ contract Game is Ownable {
      */
      function AKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
-        // last key price => ALREADY USED, need to be updated before using for new calculation
-        lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
-        while(_quantity.sub(lastAKeyPrice) >= 1) {
-            _quantity = _quantity.sub(lastAKeyPrice);
-            lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
-            ret = ret.add(1);
+        // dynamic step for approx the result without exceeding gas limit
+        uint256 step = _quantity.div(lastAKeyPrice).div(10);
+        if(step < 1) {
+            step = 1;
+        }
+        uint256 rise = step.mul(18);
+        while(_quantity.sub(lastAKeyPrice.mul(step)) >= 1) {
+            _quantity = _quantity.sub(lastAKeyPrice.mul(step));
+            lastAKeyPrice = lastAKeyPrice.mul((1000000).add(rise)).div(1000000);
+            ret = ret.add(step);
         }
         // if left money greater than half of the next key price,
         // count as 1
-        if(_quantity > lastAKeyPrice.div(2)) {
-            ret = ret.add(1);
-            lastAKeyPrice = lastAKeyPrice.mul(1000018).div(1000000);
+        if(_quantity > lastAKeyPrice.mul(step).div(2)) {
+            ret = ret.add(step);
+            lastAKeyPrice = lastAKeyPrice.mul((1000000).add(rise)).div(1000000);
         }
-        
+        // no way to be lower than 1
+        if(ret < 1){
+            ret = 1;
+        }
         return ret;
      }
      
@@ -417,17 +435,22 @@ contract Game is Ownable {
      */
      function BKeysOf(uint256 _quantity) public onlyOwner hasLaunched returns (uint256) {
         uint256 ret = 0;
-        lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000);
-        while(_quantity.sub(lastBKeyPrice) >= 1) {
+        // dynamic step for approx the result without exceeding gas limit
+        uint256 step = _quantity.div(lastAKeyPrice).div(10);
+        if(step < 1) {
+            step = 1;
+        }
+        uint256 fall = step.mul(18);
+        while(_quantity.sub(lastBKeyPrice.mul(step)) >= 1) {
             _quantity = _quantity.sub(lastBKeyPrice);
-            lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000); 
-            ret = ret.add(1);
+            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(fall)).div(1000000); 
+            ret = ret.add(step);
         }
         // if left money greater than half of the next key price,
         // count as 1        
-        if(_quantity > lastBKeyPrice.div(2)) {
-            ret = ret.add(1);
-            lastBKeyPrice = lastBKeyPrice.mul(99982).div(1000000);
+        if(_quantity > lastBKeyPrice.mul(step).div(2)) {
+            ret = ret.add(step);
+            lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(fall)).div(1000000);
         }
         // no way to be lower than 1
         if(ret < 1){
