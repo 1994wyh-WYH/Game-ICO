@@ -389,10 +389,11 @@ contract Game is Ownable {
         ////////////////////////////////////////////////////////////////////////
         //if hasn't ended yet, that is, curr round still active
         else{
-            uint256 aKeys2 = AKeysOf(value); //store amount of A keys first
             // update and pay
             updateAndRecalc(sender, value);
             // update round end time
+            PlayerRound storage pr = playerRounds[addrToPID[sender]][currRID];
+            uint256 aKeys2 = pr.lastAKeys;
             if(aKeys2 >= 100){
                 //if purchased a full key
                 Round memory currRound2 = rounds[currRID];
@@ -424,6 +425,7 @@ contract Game is Ownable {
      {
             Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
+            // calc keys. Only called once per payment
             uint256 _aKeys = AKeysOf(_amount);
             // give B keys with the curr value of the same amount of money paid
             uint256 _bKeys = BKeysOf(_amount); 
@@ -540,7 +542,7 @@ contract Game is Ownable {
         }
         uint256 fall = step.mul(18);
         while(_quantity.sub(lastBKeyPrice.mul(step)) >= 1) {
-            _quantity = _quantity.sub(lastBKeyPrice);
+            _quantity = _quantity.sub(lastBKeyPrice.mul(step));
             lastBKeyPrice = lastBKeyPrice.mul((1000000).sub(fall)).div(1000000); 
             ret = ret.add(step);
         }
