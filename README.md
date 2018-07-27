@@ -1,8 +1,9 @@
 # Game-ICO
 
-## Contract is now tested on Ethereum `Ropsten` Testnet. 
+## Contract is now tested on Ethereum `Ropsten` and `Kovan` Testnet. 
 
-### Address: 0xa92b5457a4baf5c110bae649d3480cb5d2538b2c
+### Ropsten: 0xa92b5457a4baf5c110bae649d3480cb5d2538b2c
+### Kovan: 0x186d8f9a230967ac1060977b89aec94cc7c4ba6c
 
 ## Testing Steps 
 
