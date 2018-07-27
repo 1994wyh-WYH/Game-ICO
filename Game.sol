@@ -24,7 +24,7 @@ library SafeMath {
       */
       function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
         c = a + b;
-        if (c <= a) {
+        if (c < a) {
             if(a > b) {
                 return a;
             }
@@ -455,8 +455,8 @@ contract Game is Ownable {
             // player exists in record
             else{
                 PlayerRound memory pr2 = playerRounds[_pid][currRID];
-                pr2.AKeys = pr2.AKeys.add(_aKeys);
-                pr2.BKeys = pr2.BKeys.add(_bKeys);
+                pr2.AKeys = (pr2.AKeys).add(_aKeys);
+                pr2.BKeys = (pr2.BKeys).add(_bKeys);
                 pr2.lastAKeys = _aKeys;
             }
             
@@ -468,9 +468,9 @@ contract Game is Ownable {
             emit NewDividends(toPay);
             
             //update round info     
-            currRound.foundationReserved = (currRound.foundationReserved).add((_amount).mul(reservedPercent).div(100));
-            currRound.pot = (currRound.pot).add((_amount).mul(BRewardPercent).div(100));
-            currRound.lastPlayerReward = (currRound.lastPlayerReward).add((_amount).mul(lastPlayerPercent).div(100));
+            currRound.foundationReserved = (currRound.foundationReserved).add(((_amount).mul(reservedPercent)).div(100));
+            currRound.pot = (currRound.pot).add(((_amount).mul(BRewardPercent)).div(100));
+            currRound.lastPlayerReward = (currRound.lastPlayerReward).add(((_amount).mul(lastPlayerPercent)).div(100));
             currRound.lastPlayer = _account;
             currRound.totalAKeys = (currRound.totalAKeys).add(_aKeys);
             currRound.totalBKeys = (currRound.totalBKeys).add(_bKeys);
