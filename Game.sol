@@ -189,13 +189,13 @@ contract Game is Ownable {
     mapping (address => uint256) public addrToPID; 
     // PID => player data
     mapping (uint256 => Player) public PIDToPlayers;   
-    // // PID, RID => PlayerRound
-    // mapping (uint256 => (uint256 => PlayerRound)) public playerRounds; 
+    // PID, RID => PlayerRound
+    mapping (uint256 => mapping (uint256 => PlayerRound)) public playerRounds; 
    
     struct Player{
         uint256 PID; // if new, assign new ID and update last PID;
         address account; //player address
-        mapping (uint256 => PlayerRound) myRounds; // RID => PlayerRound
+        // mapping (uint256 => PlayerRound) myRounds; // RID => PlayerRound
     }
     
     struct PlayerRound{
@@ -208,19 +208,19 @@ contract Game is Ownable {
         // NOTE: needs to be >= 1 to be eligible for last-player big-fat reward.
         uint256 lastAKeys; 
         
-        // dividends obtained after last claim, can be claimed at anytime
-        // cleared upon withdraw 
-        uint256 AEarning;
+        // // dividends obtained after last claim, can be claimed at anytime
+        // // cleared upon withdraw 
+        // uint256 AEarning;
         
         // dividends already claimed in this round. Cumulated.
         uint256 claimedAEarning;
         
-        // total dividends of the round when last claimed for player dividends
-        uint256 lastClaimTotalDivi;
+        // total dividends of the round when the player registered for this round
+        uint256 initTotalDivi;
         
-        // # of A keys when the player last claimed dividends
-        // used to approx real time dividends
-        uint256 lastClaimAKeys;
+        // // # of A keys when the player last claimed dividends
+        // // used to approx real time dividends
+        // uint256 lastClaimAKeys;
         // uint256 BEarning; // calculated only at the end of round
     }
     
@@ -430,10 +430,11 @@ contract Game is Ownable {
             
             // player is new
             if(_pid == 0){
-                Player memory p;
                 lastPID ++;
-                p.PID = lastPID;
-                p.account = _account;
+                Player memory p = Player({
+                    PID: lastPID,
+                    account: _account
+                });
                 
                 PlayerRound memory pr = PlayerRound ({
                     PID: lastPID,
@@ -441,20 +442,17 @@ contract Game is Ownable {
                     AKeys: _aKeys,
                     BKeys: _bKeys,
                     lastAKeys: _aKeys,
-                    AEarning: 0,
                     claimedAEarning: 0,
-                    lastClaimTotalDivi: 0,
-                    lastClaimAKeys: _aKeys
+                    initTotalDivi: 0
                 });
-                p.myRounds[currRID] = pr;
+                playerRounds[p.PID][currRID] = pr;
                 // update instance variables
                 PIDToPlayers[p.PID] = p;
                 addrToPID[_account] = p.PID;
             }
             // player exists in record
             else{
-                Player memory p2 = PIDToPlayers[_pid];
-                PlayerRound memory pr2 = p2.myRounds[currRID];
+                PlayerRound memory pr2 = playerRounds[_pid][currRID];
                 pr2.AKeys = pr2.AKeys.add(_aKeys);
                 pr2.BKeys = pr2.BKeys.add(_bKeys);
                 pr2.lastAKeys = _aKeys;
@@ -615,8 +613,8 @@ contract Game is Ownable {
             RID: currRID,
             totalAKeys: 0,
             totalBKeys: 0,
-            dividends: 0,
             pot: 0,
+            dividends: 0,
             foundationReserved: 0,
             lastPlayerReward: 0,
             lastPlayer: address(0),
@@ -630,26 +628,26 @@ contract Game is Ownable {
     }
     
     
-    /**
-     * @dev can be called by anyone to calc a player's dividends. 
-     * Cumulate specified earnings to players. Update info.
-     * NOTE: Earnings will all be sent to players at the END of each round.
-     * @param playerAddr Address of the player to be queried.
-     * @param total Total amount of dividends shared by all current players.
-     */
-    function calcDividends(address playerAddr, uint256 total) 
-        public 
-        onlyOwner 
-        hasLaunched 
-    {
-        Round storage r = rounds[currRID]; //view, no need to be memory
-        // fetch Player
-        Player memory p = PIDToPlayers[addrToPID[playerAddr]];
-        uint256 divi = (total).mul(p.AKeys).div(r.totalAKeys);
-        p.AEarning = p.AEarning.add(divi);
+    // /**
+    //  * @dev can be called by anyone to calc a player's dividends. 
+    //  * Cumulate specified earnings to players. Update info.
+    //  * NOTE: Earnings will all be sent to players at the END of each round.
+    //  * @param _pid
+    //  * @param _rid
+    //  */
+    // function calcDividends(uint256 _rid) 
+    //     public 
+    //     hasLaunched 
+    // {
+    //     Round storage r = rounds[currRID]; //view, no need to be memory
+    //     // fetch Player
+    //     PlayerRound memory pr = playerRounds[addrToPID[msg.sender]][_rid];
+    //     uint256 divi = (total).mul(pr.AKeys).div(r.totalAKeys);
+    //     pr.AEarning = pr.AEarning.add(divi);
+    //     pr.AKeys = 0;
         
-        emit DividendsIncr(p.account, p.AEarning);
-    }
+    //     emit DividendsIncr(p.account, p.AEarning);
+    // }
     
     /**
      * @dev can be called by anyone to withdraw dividends balance.
@@ -661,17 +659,25 @@ contract Game is Ownable {
         if(addrToPID[msg.sender] == 0) return;
         
         // fetch Player
-        Player memory p = PIDToPlayers[addrToPID[msg.sender]];
+        PlayerRound memory pr = playerRounds[addrToPID[msg.sender]][_rid];
         //fetch round
-        Round storage r = rounds[currRID]; //view, no need to be memory
+        Round storage r = rounds[_rid]; //view, no need to be memory
         
-        uint256 toSend = p.AEarning; // for proper serialization
-        p.AEarning = 0;
-        p.claimedAEarning = p.claimedAEarning.add(toSend);
-        p.last
-        (p.account).transfer(toSend);
+        // calc current earning
+        // check claimed earning >= current 
+        
+        // currrent earn 
+        // = # of A Keys * (total curr divi - init divi when player entered game)
+        // / total current A keys
+        uint256 currEarn = (pr.AKeys).mul((r.dividends).sub(pr.initTotalDivi)).div(r.totalAKeys);
+        
+        uint256 toSend = currEarn.sub(pr.claimedAEarning); // for proper serialization
+        if(toSend > 0){
+            pr.claimedAEarning = pr.claimedAEarning.add(toSend);
+            (msg.sender).transfer(toSend);
+        }
             
-        emit DividendsPaid(p.account, p.AEarning);
+        emit DividendsPaid(msg.sender, toSend);
     }
     
     /**
@@ -680,71 +686,62 @@ contract Game is Ownable {
      * NOTE: dividends in this round will be claimed AS WELL !!
      * Sends the ALL earnings to players.
      * Rewards paid at final stage of each round.
+     * @param _rid The round that you want to claim rewards from.
      */
     function claimRewards(uint256 _rid) public hasLaunched {
         //do nothing if not a valid registered player
         if(addrToPID[msg.sender] == 0) {
             return;
         }
-        //do nothing if the current round has not ended
-        if(!isCurrRoundEnded()) {
-            return;
-        }
         
         Round storage r = rounds[currRID];
-        //do nothing if current round has not been ended.
+        //do nothing if the current round has not ended
         if(!r.hasBeenEnded) {
             return;
         }
         
         // fetch Player
-        Player memory p = PIDToPlayers[addrToPID[msg.sender]];
-        uint256 rewards = (r.pot).mul(p.BKeys).div(r.totalBKeys);
+        PlayerRound memory pr = playerRounds[addrToPID[msg.sender]][_rid];
+        uint256 rewards = (r.pot).mul(pr.BKeys).div(r.totalBKeys);
+        pr.BKeys = 0;
         
-        // // check if the player's dividends has anything left
-        // calcDividends(p.account);
-        // if(p.AEarning > 0){
-        //     rewards = rewards + p.AEarning;
-        // }
-        
-        // p.AEarning = 0;
-        // p.AKeys = 0;
-        p.BKeys = 0;
-        // p.lastAKeys = 0;   
+        // check if the player's dividends has anything left
+        uint256 currEarn = (pr.AKeys).mul((r.dividends).sub(pr.initTotalDivi)).div(r.totalAKeys);
+        uint256 aRewards = currEarn.sub(pr.claimedAEarning); // for proper serialization
+        if(aRewards > 0){
+            pr.claimedAEarning = pr.claimedAEarning.add(aRewards);
+            rewards = rewards.add(aRewards);
+        }
         
         // actually pays the player automatically!
-        (p.account).transfer(rewards);
-         emit RewardsClear(p.account, rewards);
+        (msg.sender).transfer(rewards);
+         emit RewardsClear(msg.sender, rewards);
     }
     
-    /**
-     * @dev automatically claims earnings for 'lazy' players after curr round ends.
-     * @param lazy The player PID. 
-     * Apparently, the author is also too lazy to think of a better var name.
-     */
-     function autoClaim(uint256 lazy) public onlyOwner hasLaunched {
-        //do nothing if the current round has not ended
-        if(!isCurrRoundEnded()) {
-            return;
-        }
-        Round storage r = rounds[currRID];
-        //do nothing if current round has not been ended.
-        if(!r.hasBeenEnded) {
-            return;
-        }
+    // /**
+    //  * @dev automatically claims earnings for 'lazy' players after curr round ends.
+    //  * @param lazy The player PID. 
+    //  * Apparently, the author is also too lazy to think a better var name.
+    //  */
+    //  function autoClaim(uint256 _lazy, uint256 _rid) public onlyOwner hasLaunched {
+    //     Round storage r = rounds[currRID];
+    //     //do nothing if that round has not ended
+    //     if(!r.hasBeenEnded) {
+    //         return;
+    //     }
         
-        uint256 rewards = 0;
-        rewards = rewards.add(p.AEarning).add((r.pot).mul(p.BKeys).div(r.totalBKeys));
+    //     uint256 rewards = 0;
+    //     rewards = rewards.add(p.AEarning).add((r.pot).mul(pr.BKeys).div(r.totalBKeys));
         
-        Player memory p = PIDToPlayers[lazy];
-        p.AEarning = 0;
-        p.AKeys = 0;
-        p.lastAKeys = 0;
-        p.BKeys = 0;
+    //     Player memory p = PIDToPlayers[lazy];
+    //     p.AEarning = 0;
+    //     p.AKeys = 0;
+    //     p.lastAKeys = 0;
+    //     p.BKeys = 0;
          
-        (p.account).transfer(rewards);
-        emit RewardsClear(p.account, rewards);
-     }
+    //     (p.account).transfer(rewards);
+    //     emit RewardsClear(p.account, rewards);
+    //  }
     
     
     /**
@@ -758,12 +755,13 @@ contract Game is Ownable {
         }
         
         Round memory r = rounds[currRID];
-        Player storage last = PIDToPlayers[addrToPID[r.lastPlayer]];
+        PlayerRound storage last = playerRounds[addrToPID[r.lastPlayer]][currRID];
+        Player storage p = PIDToPlayers[last.PID];
         if(last.lastAKeys >= 100){
             // has a full key
-            (last.account).transfer(r.lastPlayerReward);
+            (p.account).transfer(r.lastPlayerReward);
             
-            emit GetLastWinner(last.account);
+            emit GetLastWinner(p.account);
         }
         else{
             // not a full key
