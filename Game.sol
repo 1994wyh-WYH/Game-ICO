@@ -179,7 +179,7 @@ contract Game is Ownable {
     uint256 public lastPlayerPercent = 10; 
     
     // current max player ID => total # of player
-    uint256 lastPID;    
+    uint256 public lastPID;    
     // current round ID => total # of rounds
     uint256 public currRID;    
     
@@ -249,8 +249,8 @@ contract Game is Ownable {
     // fire when one claims his/her dividends
     event DividendsPaid(address player, uint256 amount);
     
-    // // fire for front end to catch and pay all players dividends
-    // event NewDividends(uint256 amount);
+    // fire for front end to catch when dividends com in
+    event NewDividends(uint256 amount);
     
     // fire when last winner is confirmed to be valid
     event GetLastWinner(address last);
@@ -389,7 +389,7 @@ contract Game is Ownable {
         ////////////////////////////////////////////////////////////////////////
         //if hasn't ended yet, that is, curr round still active
         else{
-            // update and pay
+            // update and pay. A Keys updated here
             updateAndRecalc(sender, value);
             // update round end time
             PlayerRound storage pr = playerRounds[addrToPID[sender]][currRID];
@@ -423,17 +423,17 @@ contract Game is Ownable {
         onlyOwner 
         hasLaunched 
      {
-            Round memory currRound = rounds[currRID];
             uint256 _pid = addrToPID[_account];
+            uint256 amt = _amount; // passed value
             // calc keys. Only called once per payment
-            uint256 _aKeys = AKeysOf(_amount);
+            uint256 _aKeys = AKeysOf(amt);
             // give B keys with the curr value of the same amount of money paid
-            uint256 _bKeys = BKeysOf(_amount); 
+            uint256 _bKeys = BKeysOf(amt); 
             
             // player is new
             if(_pid == 0){
                 lastPID ++;
-                Player memory p = Player({
+                Player memory p = Player ({
                     PID: lastPID,
                     account: _account
                 });
@@ -460,11 +460,12 @@ contract Game is Ownable {
                 pr2.lastAKeys = _aKeys;
             }
             
+            Round memory currRound = rounds[currRID];
             // assign dividends
             uint256 toPay = ((_amount).mul(ARewardPercent)).div(100);
             // update A's total dividends
             currRound.dividends = (currRound.dividends).add(toPay);
-            //emit NewDividends(toPay);
+            emit NewDividends(toPay);
             
             //update round info     
             currRound.foundationReserved = (currRound.foundationReserved).add((_amount).mul(reservedPercent).div(100));
