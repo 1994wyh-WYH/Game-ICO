@@ -151,7 +151,7 @@ contract Game is Ownable {
     // 0.18% up per new actual key => 0.018% per key uint
     uint256 public initAKeyPrice = 1000000000000000; 
     // 0.18% down per new actual key => 0.018% per key uint
-    uint256 public initBKeyPrice = 10000000000000000000; 
+    uint256 public initBKeyPrice = 1000000000000000000; 
     // => NOT USED, to be used for a new calculation
     uint256 public lastAKeyPrice; 
     // => NOT USED, to be used for a new calculation
@@ -590,7 +590,7 @@ contract Game is Ownable {
     {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
-        uint256 step = _quantity.div(lastAKeyPrice).div(5);
+        uint256 step = _quantity.div(lastBKeyPrice).div(5);
         if(step < 1) {
             step = 1;
         }
@@ -667,8 +667,7 @@ contract Game is Ownable {
         }
         //update parameters
         currRID = currRID.add(1);
-        lastAKeyPrice = initBKeyPrice;
-        lastBKeyPrice = initBKeyPrice;
+
         //set a new round
         uint256 newStart;
         // launch the first game or use previous data to set start/end time
@@ -779,18 +778,25 @@ contract Game is Ownable {
         }
         
         // fetch Player
-        PlayerRound memory pr = playerRounds[addrToPID[msg.sender]][_rid];
+        PlayerRound storage pr = playerRounds[addrToPID[msg.sender]][_rid];
         uint256 rewards = (r.pot).mul(pr.BKeys).div(r.totalBKeys);
         pr.BKeys = 0;
         
-        // check if the player's dividends has anything left
         uint256 currEarn = (pr.AKeys).mul((r.dividends).sub(pr.initTotalDivi)).div(r.totalAKeys);
-        uint256 aRewards = currEarn.sub(pr.claimedAEarning); // for proper serialization
-        if(aRewards > 0){
-            pr.claimedAEarning = pr.claimedAEarning.add(aRewards);
-            rewards = rewards.add(aRewards);
-        }
+        uint256 toSend = currEarn.sub(pr.claimedAEarning); // for proper serialization
         
+        PlayerRound memory pr2 = PlayerRound ({
+            PID: pr.PID,
+            RID: _rid,
+            AKeys: pr.AKeys,
+            BKeys: 0,
+            lastAKeys: pr.lastAKeys,
+            claimedAEarning: pr.claimedAEarning.add(toSend),
+            initTotalDivi: pr.initTotalDivi
+        });
+        playerRounds[addrToPID[msg.sender]][_rid] = pr2;
+        
+        rewards = rewards.add(toSend);
         // actually pays the player automatically!
         (msg.sender).transfer(rewards);
          emit RewardsClear(msg.sender, rewards);
@@ -832,7 +838,7 @@ contract Game is Ownable {
             endRound();
         }
         
-        Round memory r = rounds[currRID];
+        Round storage r = rounds[currRID];
         PlayerRound storage last = playerRounds[addrToPID[r.lastPlayer]][currRID];
         Player storage p = PIDToPlayers[last.PID];
         if(last.lastAKeys >= keyDecimal){
