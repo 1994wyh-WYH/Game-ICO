@@ -274,8 +274,8 @@ contract Game is Ownable {
      * @param amount Amount of eth
      */
     modifier checkBoundaries(uint256 amount) {
-        // 1/10000 eth minimum, least pay for 0.01 actual key
-        require(amount >= 100000000000000); 
+        // 1/1000 eth minimum, least pay for 0.1 actual init A key
+        require(amount >= 1000000000000000); 
         require(amount <= 100000000000000000000); // 100 eth maximum
         _;    
     }
@@ -573,6 +573,7 @@ contract Game is Ownable {
         // no way to be lower than 1
         if(ret < 1){
             ret = 1;
+            lastAKeyPrice = lastAKeyPrice.mul((100000).add(18)).div(100000);
         }
         return ret;
      }
@@ -609,6 +610,7 @@ contract Game is Ownable {
         // no way to be lower than 1
         if(ret < 1){
             ret = 1;
+            lastBKeyPrice = lastBKeyPrice.mul((100000).sub(18)).div(100000);
         }
         return ret;
      }
@@ -696,27 +698,6 @@ contract Game is Ownable {
     }
     
     
-    // /**
-    //  * @dev can be called by anyone to calc a player's dividends. 
-    //  * Cumulate specified earnings to players. Update info.
-    //  * NOTE: Earnings will all be sent to players at the END of each round.
-    //  * @param _pid
-    //  * @param _rid
-    //  */
-    // function calcDividends(uint256 _rid) 
-    //     public 
-    //     hasLaunched 
-    // {
-    //     Round storage r = rounds[currRID]; //view, no need to be memory
-    //     // fetch Player
-    //     PlayerRound memory pr = playerRounds[addrToPID[msg.sender]][_rid];
-    //     uint256 divi = (total).mul(pr.AKeys).div(r.totalAKeys);
-    //     pr.AEarning = pr.AEarning.add(divi);
-    //     pr.AKeys = 0;
-        
-    //     emit DividendsIncr(p.account, p.AEarning);
-    // }
-    
     /**
      * @dev can be called by anyone to withdraw dividends balance.
      * Clears balance.
@@ -801,31 +782,6 @@ contract Game is Ownable {
         (msg.sender).transfer(rewards);
          emit RewardsClear(msg.sender, rewards);
     }
-    
-    // /**
-    //  * @dev automatically claims earnings for 'lazy' players after curr round ends.
-    //  * @param lazy The player PID. 
-    //  * Apparently, the author is also too lazy to think a better var name.
-    //  */
-    //  function autoClaim(uint256 _lazy, uint256 _rid) public onlyOwner hasLaunched {
-    //     Round storage r = rounds[currRID];
-    //     //do nothing if that round has not ended
-    //     if(!r.hasBeenEnded) {
-    //         return;
-    //     }
-        
-    //     uint256 rewards = 0;
-    //     rewards = rewards.add(p.AEarning).add((r.pot).mul(pr.BKeys).div(r.totalBKeys));
-        
-    //     Player memory p = PIDToPlayers[lazy];
-    //     p.AEarning = 0;
-    //     p.AKeys = 0;
-    //     p.lastAKeys = 0;
-    //     p.BKeys = 0;
-         
-    //     (p.account).transfer(rewards);
-    //     emit RewardsClear(p.account, rewards);
-    //  }
     
     
     /**
