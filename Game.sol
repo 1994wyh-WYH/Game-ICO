@@ -151,7 +151,7 @@ contract Game is Ownable {
     // 0.18% up per new actual key => 0.018% per key uint
     uint256 public initAKeyPrice = 1000000000000000; 
     // 0.18% down per new actual key => 0.018% per key uint
-    uint256 public initBKeyPrice = 1000000000000000000; 
+    uint256 public initBKeyPrice = 10000000000000000; 
     // => NOT USED, to be used for a new calculation
     uint256 public lastAKeyPrice; 
     // => NOT USED, to be used for a new calculation
@@ -181,7 +181,7 @@ contract Game is Ownable {
     // current max player ID => total # of player
     uint256 public lastPID;    
     // current round ID => total # of rounds
-    uint256 public currRID;    
+    uint256 public currRID; 
     
     // RID => round data
     mapping (uint256 => Round) public rounds;   
@@ -335,19 +335,30 @@ contract Game is Ownable {
     }
     
     /**
-     * @dev Fallback function. Receives ether and assign keys to the payer. 
+     * @dev Default fallback function. Receives ether and assign keys to the payer. 
      * NOTE: Payments with values outside the accepted range will be disgarded.
-     * NOTE: Payments sent during cooling down or before launch will be ignored, 
-     * that is to say, no keys given upen payment.
+     * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upon payment.
      */
-    function() external payable hasLaunched checkBoundaries(msg.value) {
+    function() public payable hasLaunched checkBoundaries(msg.value) {
         // do nothing before actual launch of the game
         // deal with the received payment
-        dealWithPay(msg.sender, msg.value);
-        
-        // UI catch and deal with payment
+        // UI catch and deal with payment and do following operations
         emit PaymentReceived(msg.sender, msg.value);
     }
+    
+    // /**
+    //  * @dev Fallback function. Receives ether and assign keys to the payer. 
+    //  * NOTE: Payments with values outside the accepted range will be disgarded.
+    //  * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upen payment.
+    //  */
+    // function receivePay() public payable hasLaunched checkBoundaries(msg.value) {
+    //     // do nothing before actual launch of the game
+    //     // deal with the received payment
+    //     dealWithPay(msg.sender, msg.value);
+        
+    //     // UI catch and deal with payment
+    //     emit PaymentReceived(msg.sender, msg.value);
+    // }
     
     /**
      * @dev Helper for dealing with any incoming tx.
@@ -572,7 +583,7 @@ contract Game is Ownable {
         }
         // no way to be lower than 1
         if(ret < 1){
-            ret = 1;
+            // ret = 1;
             lastAKeyPrice = lastAKeyPrice.mul((100000).add(18)).div(100000);
         }
         return ret;
@@ -591,7 +602,7 @@ contract Game is Ownable {
     {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
-        uint256 step = _quantity.div(lastBKeyPrice).div(5);
+        uint256 step = _quantity.div(lastBKeyPrice).div(8);
         if(step < 1) {
             step = 1;
         }
@@ -609,7 +620,7 @@ contract Game is Ownable {
         }
         // no way to be lower than 1
         if(ret < 1){
-            ret = 1;
+            // ret = 1;
             lastBKeyPrice = lastBKeyPrice.mul((100000).sub(18)).div(100000);
         }
         return ret;
@@ -814,5 +825,16 @@ contract Game is Ownable {
 }
 
 
+// contract faucet{
+//     Game main;
+//     constructor(Game _main) public{
+//         main=_main;
+//     } 
+//     function () external payable {
+//         main.receivePay.value(msg.value);
+//     }
+// }
 
-////////////////////////////////////////////////////////////// 
+
+
+//////////////////////////////////////////////////////////////
