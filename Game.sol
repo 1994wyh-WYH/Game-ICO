@@ -334,24 +334,24 @@ contract Game is Ownable {
         owner.transfer(address(this).balance); 
     }
     
-    /**
-     * @dev Default fallback function. Receives ether and assign keys to the payer. 
-     * NOTE: Payments with values outside the accepted range will be disgarded.
-     * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upon payment.
-     */
-    function() public payable hasLaunched checkBoundaries(msg.value) {
-        // do nothing before actual launch of the game
-        // deal with the received payment
-        // UI catch and deal with payment and do following operations
-        emit PaymentReceived(msg.sender, msg.value);
-    }
+    // /**
+    //  * @dev Default fallback function. Receives ether and assign keys to the payer. 
+    //  * NOTE: Payments with values outside the accepted range will be disgarded.
+    //  * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upon payment.
+    //  */
+    // function() public payable hasLaunched checkBoundaries(msg.value) {
+    //     // do nothing before actual launch of the game
+    //     // deal with the received payment
+    //     // UI catch and deal with payment and do following operations
+    //     emit PaymentReceived(msg.sender, msg.value);
+    // }
     
     /**
      * @dev Fallback function. Receives ether and assign keys to the payer. 
      * NOTE: Payments with values outside the accepted range will be disgarded.
      * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upen payment.
      */
-    function receivePay() public payable hasLaunched checkBoundaries(msg.value) {
+    function () public payable hasLaunched checkBoundaries(msg.value) {
         // do nothing before actual launch of the game
         // deal with the received payment
         
