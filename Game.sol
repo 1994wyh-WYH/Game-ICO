@@ -919,16 +919,4 @@ contract Game is Ownable {
 }
 
 
-// contract faucet{
-//     Game main;
-//     constructor(Game _main) public{
-//         main=_main;
-//     } 
-//     function () external payable {
-//         main.receivePay.value(msg.value);
-//     }
-// }
-
-
-
 //////////////////////////////////////////////////////////////
