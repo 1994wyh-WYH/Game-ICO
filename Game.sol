@@ -346,19 +346,111 @@ contract Game is Ownable {
         emit PaymentReceived(msg.sender, msg.value);
     }
     
-    // /**
-    //  * @dev Fallback function. Receives ether and assign keys to the payer. 
-    //  * NOTE: Payments with values outside the accepted range will be disgarded.
-    //  * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upen payment.
-    //  */
-    // function receivePay() public payable hasLaunched checkBoundaries(msg.value) {
-    //     // do nothing before actual launch of the game
-    //     // deal with the received payment
-    //     dealWithPay(msg.sender, msg.value);
+    /**
+     * @dev Fallback function. Receives ether and assign keys to the payer. 
+     * NOTE: Payments with values outside the accepted range will be disgarded.
+     * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upen payment.
+     */
+    function receivePay() public payable hasLaunched checkBoundaries(msg.value) {
+        // do nothing before actual launch of the game
+        // deal with the received payment
         
-    //     // UI catch and deal with payment
-    //     emit PaymentReceived(msg.sender, msg.value);
-    // }
+        uint256 _pid = addrToPID[msg.sender];
+
+        // 2 scenarios: last round has ended; you are still in a round
+        ////////////////////////////////////////////////////////////////////////
+        // last round ended
+        if(isCurrRoundEnded()){
+            //do nothing
+        }
+        ////////////////////////////////////////////////////////////////////////
+        //if hasn't ended yet, that is, curr round still active
+        else{
+            // update and pay. A Keys updated here
+            
+            // calc keys. Only called once per payment
+            uint256 _aKeys;
+            (_aKeys, lastAKeyPrice)= AKeysOf(msg.value);
+
+            // give B keys with the curr value of the same amount of money paid
+            uint256 _bKeys;
+            (_bKeys,lastBKeyPrice)=BKeysOf(msg.value);
+ 
+            // player is new
+            if(_pid == 0){
+                lastPID ++;
+                Player memory p = Player ({
+                    PID: lastPID,
+                    account: msg.sender
+                });
+                
+                PlayerRound memory pr = PlayerRound ({
+                    PID: lastPID,
+                    RID: currRID,
+                    AKeys: _aKeys,
+                    BKeys: _bKeys,
+                    lastAKeys: _aKeys,
+                    claimedAEarning: 0,
+                    initTotalDivi: 0
+                });
+                playerRounds[p.PID][currRID] = pr;
+                // update instance variables
+                PIDToPlayers[p.PID] = p;
+                addrToPID[msg.sender] = p.PID;
+            }
+            // player exists in record
+            else{
+                PlayerRound storage pr2 = playerRounds[_pid][currRID];
+                PlayerRound memory pr3 = PlayerRound ({
+                    PID: _pid,
+                    RID: currRID,
+                    AKeys: (pr2.AKeys).add(_aKeys),
+                    BKeys: (pr2.BKeys).add(_bKeys),
+                    lastAKeys: _aKeys,
+                    claimedAEarning: pr2.claimedAEarning,
+                    initTotalDivi: pr2.initTotalDivi
+                });
+                playerRounds[_pid][currRID] = pr3;
+            }
+            
+            // update round info
+            Round storage currRound = rounds[currRID];
+            // update A's total dividends 
+            // update other round info 
+            // update round end time
+            uint256 newEnd = currRound.end;
+            if(_aKeys >= keyDecimal){
+                //if purchased a full key
+                if(countdown < ((currRound.end).sub(now)).add(_aKeys.mul(increaseStep).div(100))){
+                    newEnd = now.add(countdown);
+                }
+                else{
+                    newEnd = (currRound.end).add(_aKeys.mul(increaseStep).div(100));
+                }
+                emit EndUpdate(newEnd);
+            }
+            Round memory r = Round({
+                RID: currRID,
+                totalAKeys: (currRound.totalAKeys).add(_aKeys),
+                totalBKeys: (currRound.totalBKeys).add(_bKeys),
+                pot: (currRound.pot).add(((msg.value).mul(BRewardPercent)).div(100)),
+                dividends: (currRound.dividends).add(((msg.value).mul(ARewardPercent)).div(100)),
+                foundationReserved: (currRound.foundationReserved).add(((msg.value).mul(reservedPercent)).div(100)),
+                lastPlayerReward: (currRound.lastPlayerReward).add(((msg.value).mul(lastPlayerPercent)).div(100)),
+                lastPlayer: msg.sender,
+                start: currRound.start,
+                end: newEnd,
+                hasBeenEnded: false                
+            });
+            rounds[currRID] = r;
+            emit NewDividends(r.dividends);
+            emit PotIncr(currRound.pot);
+            
+        }
+        
+        // UI catch and deal with payment
+        emit PaymentReceived(msg.sender, msg.value);
+    }
     
     /**
      * @dev Helper for dealing with any incoming tx.
@@ -456,9 +548,11 @@ contract Game is Ownable {
             // uint256 amt2 = _amount; // passed value
             
             // calc keys. Only called once per payment
-            uint256 _aKeys = AKeysOf(_amount);
+            uint256 _aKeys;
+            (_aKeys, lastAKeyPrice)= AKeysOf(_amount);
             // give B keys with the curr value of the same amount of money paid
-            uint256 _bKeys = BKeysOf(_amount); 
+            uint256 _bKeys;
+            (_bKeys, lastBKeyPrice)= BKeysOf(_amount); 
             
             // player is new
             if(_pid == 0){
@@ -559,34 +653,34 @@ contract Game is Ownable {
      */
      function AKeysOf(uint256 _quantity) 
         public 
-        onlyOwner 
+        view
         hasLaunched 
-        returns (uint256) 
+        returns (uint256, uint256) 
     {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
         uint256 step = _quantity.div(lastAKeyPrice).div(10);
+        uint256 price = lastAKeyPrice;
         if(step < 1) {
             step = 1;
         }
         uint256 rise = step.mul(18);
-        while(_quantity.sub(lastAKeyPrice.mul(step)) >= 1) {
-            _quantity = _quantity.sub(lastAKeyPrice.mul(step));
-            lastAKeyPrice = lastAKeyPrice.mul((100000).add(rise)).div(100000);
+        while(_quantity.sub(price.mul(step)) >= 1) {
+            _quantity = _quantity.sub(price.mul(step));
+            price = price.mul((100000).add(rise)).div(100000);
             ret = ret.add(step);
         }
         // if left money greater than half of the next key price,
         // count as 1
-        if(_quantity > lastAKeyPrice.mul(step).div(2)) {
+        if(_quantity > price.mul(step).div(2)) {
             ret = ret.add(step);
-            lastAKeyPrice = lastAKeyPrice.mul((100000).add(rise)).div(100000);
+            price = price.mul((100000).add(rise)).div(100000);
         }
         // no way to be lower than 1
         if(ret < 1){
-            // ret = 1;
-            lastAKeyPrice = lastAKeyPrice.mul((100000).add(18)).div(100000);
+            price = price.mul((100000).add(18)).div(100000);
         }
-        return ret;
+        return (ret,price);
      }
      
     /**
@@ -596,34 +690,34 @@ contract Game is Ownable {
      */
      function BKeysOf(uint256 _quantity)    
         public 
-        onlyOwner 
+        view
         hasLaunched 
-        returns (uint256) 
+        returns (uint256, uint256) 
     {
         uint256 ret = 0;
         // dynamic step for approx the result without exceeding gas limit
         uint256 step = _quantity.div(lastBKeyPrice).div(8);
+        uint256 price = lastBKeyPrice;
         if(step < 1) {
             step = 1;
         }
         uint256 fall = step.mul(18);
-        while(_quantity.sub(lastBKeyPrice.mul(step)) >= 1) {
-            _quantity = _quantity.sub(lastBKeyPrice.mul(step));
-            lastBKeyPrice = lastBKeyPrice.mul((100000).sub(fall)).div(100000); 
+        while(_quantity.sub(price.mul(step)) >= 1) {
+            _quantity = _quantity.sub(price.mul(step));
+            price = price.mul((100000).sub(fall)).div(100000); 
             ret = ret.add(step);
         }
         // if left money greater than half of the next key price,
         // count as 1        
-        if(_quantity > lastBKeyPrice.mul(step).div(2)) {
+        if(_quantity > price.mul(step).div(2)) {
             ret = ret.add(step);
-            lastBKeyPrice = lastBKeyPrice.mul((100000).sub(fall)).div(100000);
+            price = price.mul((100000).sub(fall)).div(100000);
         }
         // no way to be lower than 1
         if(ret < 1){
-            // ret = 1;
-            lastBKeyPrice = lastBKeyPrice.mul((100000).sub(18)).div(100000);
+            price = price.mul((100000).sub(18)).div(100000);
         }
-        return ret;
+        return (ret,price);
      }
          
     
