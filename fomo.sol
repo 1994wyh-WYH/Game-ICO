@@ -802,6 +802,9 @@ contract Game is Ownable {
         });
         rounds[currRID] = r;
         
+        lastAKeyPrice = initAKeyPrice;
+        lastBKeyPrice = initBKeyPrice;
+        
         emit NewRound(r.RID, r.start, r.end);
     }
     
