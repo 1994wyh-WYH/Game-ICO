@@ -65,6 +65,7 @@ library SafeMath {
       */
       function div(uint256 a, uint256 b) internal pure returns (uint256) {
         // assert(b > 0); // Solidity automatically throws when dividing by 0
+        if(b <= 0) return 0;
         uint256 c = a / b;
         if(c > a){
             return 1;
@@ -149,8 +150,10 @@ contract Game is Ownable {
     
     //NOTE: 10 key units = 1 actual key for purchase
     // 0.18% up per new actual key => 0.018% per key uint
+    // 0.01 ETH per A key => 0.001 ETH per A key unit
     uint256 public initAKeyPrice = 1000000000000000; 
     // 0.18% down per new actual key => 0.018% per key uint
+    // 0.1 ETH per B key => 0.01 ETH per B key unit
     uint256 public initBKeyPrice = 10000000000000000; 
     // => NOT USED, to be used for a new calculation
     uint256 public lastAKeyPrice; 
@@ -357,7 +360,6 @@ contract Game is Ownable {
     function () public payable hasLaunched checkBoundaries(msg.value) {
         // do nothing before actual launch of the game
         // deal with the received payment
-        
         uint256 _pid = addrToPID[msg.sender];
 
         // 2 scenarios: last round has ended; you are still in a round
@@ -368,8 +370,15 @@ contract Game is Ownable {
             if(!rounds[currRID].hasBeenEnded){
                 _endRound();
             }
-            if(now >= rounds[currRID].end.add(roundInterval)){
+            if(now >= (rounds[currRID].end).add(roundInterval)){
                 _startRound();
+                // deal with extreme cases -- empty rounds
+                while(now >= rounds[currRID].end){
+                    _endRound();
+                    if(now >= (rounds[currRID].end).add(roundInterval)){
+                        _startRound();
+                    }
+                }
                 _updateAndRecalc(msg.sender, msg.value);
             }
             else{
