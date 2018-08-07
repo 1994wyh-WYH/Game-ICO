@@ -137,6 +137,17 @@ contract Ownable {
       }
 }
 
+library Util {
+    function toBytes(address a) internal constant returns (bytes b){
+    assembly {
+        let m := mload(0x40)
+        mstore(add(m, 20), xor(0x140000000000000000000000000000000000000000, a))
+        mstore(0x40, add(m, 52))
+        b := m
+   }
+}
+}
+
 
 //////////////////////////////////////////////////////////////
 ///////////////   starts here ! //////////////////////////////
@@ -147,6 +158,7 @@ contract Ownable {
  
 contract Game is Ownable {
     using SafeMath for *;
+    using Util for address;
     
     //NOTE: 10 key units = 1 actual key for purchase
     // 0.18% up per new actual key => 0.018% per key uint
@@ -193,7 +205,9 @@ contract Game is Ownable {
     // PID => player data
     mapping (uint256 => Player) public PIDToPlayers;   
     // PID, RID => PlayerRound
-    mapping (uint256 => mapping (uint256 => PlayerRound)) public playerRounds; 
+    mapping (uint256 => mapping (uint256 => PlayerRound)) public playerRounds;
+    
+    mapping (bytes => uint256) referBonus;
    
     struct Player{
         uint256 PID; // if new, assign new ID and update last PID;
@@ -328,7 +342,8 @@ contract Game is Ownable {
      */
     function withdraw(uint256 _rid) public hasLaunched {
         require(rounds[_rid].hasBeenEnded);
-        owner.transfer(rounds[_rid].foundationReserved); 
+        uint256 toWithdraw = rounds[_rid].foundationReserved > address(this).balance ? address(this).balance : rounds[_rid].foundationReserved;
+        owner.transfer(toWithdraw); 
     }
     
     /**
@@ -380,6 +395,9 @@ contract Game is Ownable {
                     }
                 }
                 _updateAndRecalc(msg.sender, msg.value);
+                // update referrer bonus
+                // address referrer = _convertToAddr(msg.data);
+                _addReferBonus(msg.data, msg.value);
             }
             else{
                 // do nothing
@@ -468,10 +486,42 @@ contract Game is Ownable {
             emit NewDividends(r.dividends);
             emit PotIncr(currRound.pot);
             
+            // update referrer bonus
+            // referrer = _convertToAddr(msg.data);
+            _addReferBonus(msg.data, msg.value);
         }
         
         // UI catch and deal with payment
         emit PaymentReceived(msg.sender, msg.value);
+    }
+    
+    /**
+     * @dev private helper checking if referrer is valid.
+     * @param data TX optional data
+     * @return the converted address, 0 if not valid.
+     */
+     function _convertToAddr(bytes data) private view returns(address) {
+         bytes32 out;
+         for (uint i = 0; i < 32; i++) {
+            out |= bytes32(data[i] & 0xFF) >> (i * 8);
+         }
+         address toTest = address(out);
+         if(addrToPID[toTest] > 0){
+             return toTest;
+         }
+         else{
+             return address(0x0);
+         }
+     }
+    
+    /**
+     * @dev private helper for adding referral bonus
+     * @param referrer Actually the raw data the payer passed in but no big difference.
+     * @param amount Amount that the referee sent to contract.
+     */
+    function _addReferBonus(bytes referrer, uint256 amount) private hasLaunched {
+        // require(addrToPID[referrer] > 0); // already checked
+        referBonus[referrer] = amount.mul(5).div(100);
     }
     
     /**
@@ -480,8 +530,7 @@ contract Game is Ownable {
      * @param value The amount sent to contract
      */
     function dealWithPay(address sender, uint256 value) 
-        public 
-        onlyOwner 
+        private 
         hasLaunched 
     {
         // for time consistency throughout the function
@@ -496,14 +545,14 @@ contract Game is Ownable {
             // NOTE: currRound changes
             uint256 lastEnd = rounds[currRID].end;
             if(!rounds[currRID].hasBeenEnded){
-                endRound();
+                _endRound();
             }
             
             if (_now >= lastEnd.add(roundInterval)) {
                 // has ended and passed cooling down but not yet started a new round
                 // End curr round
                 // Start a new round!
-                startRound();
+                _startRound();
                 _updateAndRecalc(sender, value);
             }
             else{
@@ -930,6 +979,8 @@ contract Game is Ownable {
         // / total current A keys
         uint256 currEarn = (pr.AKeys).mul((r.dividends).sub(pr.initTotalDivi)).div(r.totalAKeys);
         uint256 toSend = currEarn.sub(pr.claimedAEarning); // for proper serialization
+        // add referral bonus as well
+        toSend = toSend.add(referBonus[msg.sender.toBytes()]);
         if(toSend > 0){
             PlayerRound memory pr2 = PlayerRound ({
                 PID: pr.PID,
@@ -941,7 +992,7 @@ contract Game is Ownable {
                 initTotalDivi: pr.initTotalDivi
             });
             playerRounds[addrToPID[msg.sender]][_rid] = pr2;
-            // make sctual tx
+            // make actual tx
             (msg.sender).transfer(toSend);
         }
             
