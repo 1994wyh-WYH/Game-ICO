@@ -220,14 +220,14 @@ contract Game is Ownable {
     }
    
     struct Player {
-        uint256 PID; // if new, assign new ID and update last PID;
+        // uint256 PID; // if new, assign new ID and update last PID;
         address account; //player address
         // mapping (uint256 => PlayerRound) myRounds; // RID => PlayerRound
     }
     
     struct PlayerRound {
-        uint256 PID;
-        uint256 RID;
+        // uint256 PID;
+        // uint256 RID;
         uint256 AKeys; // set to 0 upon paying dividends
         uint256 BKeys; // only cleared at final stage
         
@@ -254,7 +254,7 @@ contract Game is Ownable {
     }
     
     struct Round {
-        uint256 RID; // primary key
+        // uint256 RID; // primary key
         
         uint256 totalAKeys;
         uint256 totalBKeys;
@@ -496,13 +496,13 @@ contract Game is Ownable {
             if(_pid == 0){
                 lastPID ++;
                 Player memory p = Player ({
-                    PID: lastPID,
+                    // PID: lastPID,
                     account: _account
                 });
                 
                 PlayerRound memory pr = PlayerRound ({
-                    PID: lastPID,
-                    RID: currRID,
+                    // PID: lastPID,
+                    // RID: currRID,
                     AKeys: _aKeys,
                     BKeys: _bKeys,
                     lastAKeys: _aKeys,
@@ -518,8 +518,8 @@ contract Game is Ownable {
             else{
                 PlayerRound storage pr2 = playerRounds[_pid][currRID];
                 PlayerRound memory pr3 = PlayerRound ({
-                    PID: _pid,
-                    RID: currRID,
+                    // PID: _pid,
+                    // RID: currRID,
                     AKeys: (pr2.AKeys).add(_aKeys),
                     BKeys: (pr2.BKeys).add(_bKeys),
                     lastAKeys: _aKeys,
@@ -556,7 +556,7 @@ contract Game is Ownable {
             // update A's total dividends 
             // update other round info 
             Round memory r = Round({
-                RID: currRID,
+                // RID: currRID,
                 totalAKeys: (currRound.totalAKeys).add(_aKeys),
                 totalBKeys: (currRound.totalBKeys).add(_bKeys),
                 pot: (currRound.pot).add(((_amount).mul(BRewardPercent)).div(100)),
@@ -672,7 +672,7 @@ contract Game is Ownable {
         // do not update curr RID!!
         Round storage currRound = rounds[currRID];
         Round memory r = Round ({
-            RID: currRID,
+            // RID: currRID,
             totalAKeys: currRound.totalAKeys,
             totalBKeys: currRound.totalBKeys,
             pot: currRound.pot,
@@ -711,7 +711,7 @@ contract Game is Ownable {
         // do not update curr RID!!
         Round storage currRound = rounds[currRID];
         Round memory r = Round ({
-            RID: currRID,
+            // RID: currRID,
             totalAKeys: currRound.totalAKeys,
             totalBKeys: currRound.totalBKeys,
             pot: currRound.pot,
@@ -761,7 +761,7 @@ contract Game is Ownable {
             newStart = now;
         }
         Round memory r = Round({
-            RID: currRID,
+            // RID: currRID,
             totalAKeys: 0,
             totalBKeys: 0,
             pot: 0,
@@ -808,7 +808,7 @@ contract Game is Ownable {
             newStart = now;
         }
         Round memory r = Round({
-            RID: currRID,
+            // RID: currRID,
             totalAKeys: 0,
             totalBKeys: 0,
             pot: 0,
@@ -845,8 +845,8 @@ contract Game is Ownable {
         uint256 toSend = calcDivi(_rid, _pid, pr, r);
         if(toSend > 0){
             PlayerRound memory pr2 = PlayerRound ({
-                PID: pr.PID,
-                RID: _rid,
+                // PID: pr.PID,
+                // RID: _rid,
                 AKeys: pr.AKeys,
                 BKeys: pr.BKeys,
                 lastAKeys: pr.lastAKeys,
@@ -906,9 +906,7 @@ contract Game is Ownable {
      */
     function claimRewards(uint256 _rid) public hasLaunched {
         //do nothing if not a valid registered player
-        if(addrToPID[msg.sender] == 0) {
-            return;
-        }
+        require(addrToPID[msg.sender] >= 1);
         
         Round storage r = rounds[currRID];
         //do nothing if the current round has not ended
@@ -926,8 +924,8 @@ contract Game is Ownable {
         uint256 toSend = calcDivi(_rid, _pid, pr, r);
         // clear A, B rewards
         PlayerRound memory pr2 = PlayerRound ({
-            PID: pr.PID,
-            RID: _rid,
+            // PID: pr.PID,
+            // RID: _rid,
             AKeys: pr.AKeys,
             BKeys: 0,
             lastAKeys: pr.lastAKeys,
@@ -947,7 +945,7 @@ contract Game is Ownable {
      * @dev Checks if the last player is eligible for last-player reward.
      * If so, pay the player.
      */
-     function checkAndPayLastPlayer() public hasLaunched {
+     function checkAndPayLastPlayer() private hasLaunched {
         // check if last round has ended. If not, need to end last round first
         require(rounds[currRID].hasBeenEnded);
         
