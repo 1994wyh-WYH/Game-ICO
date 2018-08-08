@@ -552,20 +552,25 @@ contract Game is Ownable {
      {
             Round storage currRound = rounds[currRID];
             // assign dividends
-            uint256 toPay = ((_amount).mul(ARewardPercent)).div(100);
+            uint256 toDiv = ((_amount).mul(ARewardPercent)).div(100);
             // update A's total dividends 
             // update other round info 
+            uint256 newEnd = currRound.end;
+            if(aKeys2 >= keyDecimal){
+                //if purchased a full key
+                newEnd = _now.add(countdown);
+            }
             Round memory r = Round({
                 // RID: currRID,
                 totalAKeys: (currRound.totalAKeys).add(_aKeys),
                 totalBKeys: (currRound.totalBKeys).add(_bKeys),
                 pot: (currRound.pot).add(((_amount).mul(BRewardPercent)).div(100)),
-                dividends: (currRound.dividends).add(toPay),
+                dividends: (currRound.dividends).add(toDiv),
                 foundationReserved: (currRound.foundationReserved).add(((_amount).mul(reservedPercent)).div(100)),
                 lastPlayerReward: (currRound.lastPlayerReward).add(((_amount).mul(lastPlayerPercent)).div(100)),
                 lastPlayer: _account,
                 start: currRound.start,
-                end: currRound.end,
+                end: newEnd,
                 hasBeenEnded: false                
             });
             rounds[currRID] = r;
