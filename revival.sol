@@ -188,36 +188,36 @@ contract Game is Ownable {
     //NOTE: 10 key units = 1 actual key for purchase
     // 0.18% up per new actual key => 0.018% per key uint
     // 0.01 ETH per A key => 0.001 ETH per A key unit
-    uint256 public initAKeyPrice = 1000000000000000; 
+    uint256 public INITAKEYPRICE = 1000000000000000; 
     // 0.18% down per new actual key => 0.018% per key uint
     // 0.1 ETH per B key => 0.01 ETH per B key unit
-    uint256 public initBKeyPrice = 10000000000000000; 
+    uint256 public INITBKEYPRICE = 10000000000000000; 
     // => NOT USED, to be used for a new calculation
     uint256 public lastAKeyPrice; 
     // => NOT USED, to be used for a new calculation
     uint256 public lastBKeyPrice; 
     
-    uint256 public launchTime = 10; // ? to be decided
+    uint256 public LAUNCHTIME = 10; // ? to be decided
     
     // 01/01/2020 ? to be decided
-    uint256 public expirationTime = 1576800000; 
+    uint256 public EXPIRATIONTIME = 1576800000; 
     
     // 12 h countdown cap, reset when get full A key
-    uint256 public countdown = 43200; 
+    uint256 public COUNTDOWN = 43200; 
     // // Increase 2 minutes per purchase of a full A key
     // uint256 public increaseStep = 120; 
     // 10 minutes between each round
-    uint256 public roundInterval = 600; 
+    uint256 public ROUNDINTERVAL = 600; 
     
     // 10 key units = 1 actual key
-    uint256 public keyDecimal = 10; 
+    uint256 public KEYDECIMAL = 10; 
 
-    uint256 public BRewardPercent = 40;
-    uint256 public reservedPercent = 10;
-    uint256 public ARewardPercent = 40;
+    uint256 public BREWARDPERCENT = 40;
+    uint256 public RESERVEDPERCENT = 10;
+    uint256 public AREWARDPERCENT = 40;
     // BIG FAT reward for last player 
-    uint256 public lastPlayerPercent = 10; 
-    uint256 public referPercent = 5;
+    uint256 public LASTPLAYERPERCENT = 10; 
+    uint256 public REFERPERCENT = 5;
     
     // current max player ID => total # of player
     uint256 public lastPID;    
@@ -352,7 +352,7 @@ contract Game is Ownable {
      */
     modifier hasExpired() {
         require(now >= rounds[currRID].end);
-        require(now >= expirationTime);
+        require(now >= EXPIRATIONTIME);
         _;
     }
     
@@ -360,7 +360,7 @@ contract Game is Ownable {
      * @dev check if has passed launch time
      */
     modifier readyToLaunch() {
-        require(now >= launchTime);
+        require(now >= LAUNCHTIME);
         _;
     }
     
@@ -369,9 +369,9 @@ contract Game is Ownable {
      */
     constructor() public {
         // init dynamically changing values
-        lastAKeyPrice = initAKeyPrice;
-        lastBKeyPrice = initBKeyPrice;
-        lastPID = 2;
+        lastAKeyPrice = INITAKEYPRICE;
+        lastBKeyPrice = INITBKEYPRICE;
+        lastPID = 0;
         currRID = 0;
     }
     
@@ -410,15 +410,21 @@ contract Game is Ownable {
      * NOTE: Payments with values outside the accepted range will be disgarded.
      * NOTE: Payments sent during cooling down or before launch will be ignored, that is to say, no keys given upen payment.
      */
-    function () public payable hasLaunched checkBoundaries(msg.value) {
+    function () 
+        public 
+        payable 
+        readyToLaunch 
+        checkBoundaries(msg.value) 
+    {
         // do nothing before actual launch of the game
         // deal with the received payment
-        uint256 _pid = addrToPID[msg.sender];
+       
         // launtch game
-        if(currRID==0){
+        if(currRID < 1){
              _startRound();
         }
-        // 2 scenarios: last round has ended; you are still in a round.
+        uint256 _pid = addrToPID[msg.sender];
+        // 2 scenarios: 1. last round has ended; 2.you are still in a round.
         // 1 => 2
         ////////////////////////////////////////////////////////////////////////
         // trigger startRound(), or during cooling down
@@ -431,14 +437,14 @@ contract Game is Ownable {
                 claimRewards();
             }
             
-            if(now < (rounds[currRID].end).add(roundInterval)){
+            if(now < (rounds[currRID].end).add(ROUNDINTERVAL)){
                 // in the cooling down interval, do nothing
                 return;
             }
             else{
                 // deal with extreme cases -- empty rounds
                 // uint256 extra = (now.sub(rounds[currRID].end)).div(countdown.add(roundInterval));
-                while(now >= (rounds[currRID].end).add(roundInterval)){
+                while(now >= (rounds[currRID].end).add(ROUNDINTERVAL)){
                     _startRound();
                     if(now >= (rounds[currRID].end)){
                         _endRound();
@@ -452,9 +458,7 @@ contract Game is Ownable {
 
         // update and pay. Round updated as well
         _updateAndRecalc(msg.sender, _pid, msg.value);
-        // _updateTXRecord(_pid, currRID);
         // update referrer bonus
-        // referrer = _convertToAddr(msg.data);
         if((msg.data).bytesToUint() == 1){
             withdrawDividends();
         }
@@ -477,7 +481,7 @@ contract Game is Ownable {
         require(ref != (msg.sender)); 
         // check player not crediting to self and add refer bonus
         uint256 _pid = addrToPID[ref];
-        players[_pid].earning = (players[_pid].earning).add(amount.mul(referPercent) / 100);
+        players[_pid].earning = (players[_pid].earning).add(amount.mul(REFERPERCENT) / 100);
     }
     
     /**
@@ -500,20 +504,11 @@ contract Game is Ownable {
             // player is new
             if(_pid == 0){
                 lastPID ++;
-                Player memory p = Player ({
-                    account: _account,
-                    earning: 0,
-                    lastRound: 0
-                });
-                PlayerRound memory pr = PlayerRound ({
-                    AKeys: _aKeys,
-                    BKeys: _bKeys,
-                    lastAKeys: _aKeys,
-                    cumu: 0
-                });
-                playerRounds[lastPID][currRID] = pr;
+                playerRounds[lastPID][currRID].AKeys = _aKeys;
+                playerRounds[lastPID][currRID].BKeys = _bKeys;
+                playerRounds[lastPID][currRID].lastAKeys = _aKeys;
                 // update instance variables
-                players[lastPID] = p;
+                players[lastPID].account = _account;
                 addrToPID[_account] = lastPID;
             }
             // player exists in record
@@ -524,10 +519,11 @@ contract Game is Ownable {
                 playerRounds[_pid][currRID].AKeys = playerRounds[_pid][currRID].AKeys.add(_aKeys);
                 playerRounds[_pid][currRID].BKeys = playerRounds[_pid][currRID].BKeys.add(_bKeys);
             }
-            // update dividends
-            _updateCumus(_pid, _amount, _aKeys);
+            
             // update round info
             _roundUpdate(_account, _amount, _aKeys, _bKeys);
+            // update dividends
+            _updateCumus(_pid, _amount, _aKeys);
      }
      
     /**
@@ -539,16 +535,17 @@ contract Game is Ownable {
     {
         // if the player has played a previous round,
         // move the previous earnings to curr round
-        if (players[_pid].lastRound != 0)
+        if (players[_pid].lastRound != 0) {
             updatePlayerEarn(_pid, players[_pid].lastRound);
+        }
             
         // update player's last round played
         players[_pid].lastRound = currRID;
-
     }
     
     /**
-     * @dev updates 'cumu' in Round and PlayerRound upon tx
+     * @dev updates 'cumu' in Round and PlayerRound upon tx.
+     * DOES NOT UPDATE DIVI POT.
      * @param _pid PID
      * @param _amount Total paid amount
      * @param _keys Purchased # of A keys
@@ -557,11 +554,13 @@ contract Game is Ownable {
     function _updateCumus(uint256 _pid, uint256 _amount, uint256 _keys)
         private
     {
-        _amount = _amount.mul(ARewardPercent) / 100;
-        Round storage r = rounds[currRID];
+        _amount = _amount.mul(AREWARDPERCENT) / 100;
         // calc profit per key & round cumu based on this buy
-        uint256 _ppt = _amount / r.totalAKeys;
-        rounds[currRID].cumu = _ppt.add(r.cumu);
+        uint256 _ppt = 0;
+        if(rounds[currRID].totalAKeys > 0){
+            _ppt  = _amount / rounds[currRID].totalAKeys;
+        }
+        rounds[currRID].cumu = _ppt.add(rounds[currRID].cumu);
         // calculate player earnings from their own purchase (only based on the keys just bought)
         // update player cumu
         uint256 _pearn = _ppt.mul(_keys);
@@ -587,22 +586,22 @@ contract Game is Ownable {
      {
             Round storage currRound = rounds[currRID];
             // assign dividends
-            uint256 toDiv = ((_amount).mul(ARewardPercent)) / 100;
+            uint256 toDiv = ((_amount).mul(AREWARDPERCENT)) / 100;
             // update A's total dividends 
             // update other round info 
             uint256 newEnd = currRound.end;
-            if(_aKeys >= keyDecimal){
+            if(_aKeys >= KEYDECIMAL){
                 //if purchased a full key
-                newEnd = now.add(countdown);
+                newEnd = now.add(COUNTDOWN);
             }
             Round memory r = Round({
                 cumu: currRound.cumu,
                 totalAKeys: (currRound.totalAKeys).add(_aKeys),
                 totalBKeys: (currRound.totalBKeys).add(_bKeys),
-                pot: (currRound.pot).add(((_amount).mul(BRewardPercent))/100),
+                pot: (currRound.pot).add(((_amount).mul(BREWARDPERCENT))/100),
                 dividends: (currRound.dividends).add(toDiv),
-                foundationReserved: (currRound.foundationReserved).add(((_amount).mul(reservedPercent))/100),
-                lastPlayerReward: (currRound.lastPlayerReward).add(((_amount).mul(lastPlayerPercent))/100),
+                foundationReserved: (currRound.foundationReserved).add(((_amount).mul(RESERVEDPERCENT))/100),
+                lastPlayerReward: (currRound.lastPlayerReward).add(((_amount).mul(LASTPLAYERPERCENT))/100),
                 lastPlayer: _account,
                 start: currRound.start,
                 end: newEnd,
@@ -728,47 +727,36 @@ contract Game is Ownable {
     function _startRound() private readyToLaunch {
         // do not start until actual launchTime
         // check and return without doing anything if not ready to start
-        require((rounds[currRID].end).add(roundInterval) <= now || currRID == 0);
+        require((rounds[currRID].end).add(ROUNDINTERVAL) <= now);
         
         // check if last round has ended. If not, need to end last round first
         if((currRID!=0) && (!rounds[currRID].hasBeenEnded)){
             _endRound();
         }
         //update parameters
-        currRID = currRID.add(1);
+        currRID = currRID + 1;
 
         //set a new round
         uint256 newStart;
         // launch the first game or use previous data to set start/end time
         if(currRID > 1){
-            newStart = (rounds[currRID-1].end).add(roundInterval);
+            newStart = (rounds[currRID-1].end).add(ROUNDINTERVAL);
         }
         else{
             newStart = now;
         }
-        Round memory r = Round({
-            cumu: 0,
-            totalAKeys: 0,
-            totalBKeys: 0,
-            pot: 0,
-            dividends: 0,
-            foundationReserved: 0,
-            lastPlayerReward: 0,
-            lastPlayer: address(0),
-            start: newStart,
-            end: newStart.add(countdown),
-            hasBeenEnded: false
-        });
-        rounds[currRID] = r;
+
+        rounds[currRID].start = newStart;
+        rounds[currRID].end = newStart.add(COUNTDOWN);
         
-        lastAKeyPrice = initAKeyPrice;
-        lastBKeyPrice = initBKeyPrice;
+        lastAKeyPrice = INITAKEYPRICE;
+        lastBKeyPrice = INITBKEYPRICE;
         
-        emit NewRound(currRID, r.start, r.end);
+        emit NewRound(currRID, newStart, rounds[currRID].end);
     }
     
     /**
-     * @dev can be called by anyone to withdraw dividends + rewards/bonus balance.
+     * @dev can be called by anyone to withdraw dividends + rewards and bonus balance.
      * Clears balance.
      */
     function withdrawDividends() public hasLaunched {
@@ -777,7 +765,7 @@ contract Game is Ownable {
         // fetch Player
         uint256 _pid = addrToPID[msg.sender];
         // update player earning
-        updatePlayerEarn(_pid, players[_pid].lastRound);
+        updatePlayerEarn(_pid, currRID);
         // from cumulated earnings 
         uint256 _earnings = players[_pid].earning;
         if (_earnings > 0) {
@@ -787,41 +775,6 @@ contract Game is Ownable {
 
         emit DividendsPaid(msg.sender, _earnings);
     }
-    
-    // function calcDivi(uint256 _rid, uint256 _pid, PlayerRound pr, Round r) 
-    //     private 
-    //     view
-    //     hasLaunched 
-    // returns (uint256)
-    // {
-    //     uint256 toSend = 0;
-    //     uint256 dummy = (pr.maxTxID).sub(pr.startClaimTxID).add(1);
-    //     uint256 step = (dummy).div(10);
-    //     if(step < 1) {
-    //         step = 1; // just to make sure no infinite loop
-    //     }
-    //     uint256 s1 = pr.startClaimTxID;
-    //     uint256 s2 = s1.add(step);
-    //     uint256 e = pr.maxTxID;
-    //     TXRecord storage tx1;
-    //     TXRecord storage tx2;
-    //     uint256 ave; // average key during the tx interval
-    //     while(s2 < e){
-    //         tx1 = txRecords[_pid][_rid][s1];
-    //         tx2 = txRecords[_pid][_rid][s2];
-    //         ave = (tx2.currTotalAkeys.add(tx1.currTotalAkeys)).div(2);
-    //         toSend = toSend.add((tx2.currTotalDivi.sub(tx1.currTotalDivi)).mul(tx1.cumulatedAKeys).div(ave));
-    //         s1=s2;
-    //         s2=s2.add(step);
-    //     }
-    //     tx1 = txRecords[_pid][_rid][s1];
-    //     ave = r.totalAKeys.add(tx1.currTotalAkeys).div(2);
-    //     dummy = (r.dividends.sub(tx1.currTotalDivi));
-    //     toSend = (toSend.add(dummy)).mul(tx1.cumulatedAKeys).div(ave);
-    //     // add referral bonus as well
-    //     toSend = toSend.add(referBonus[(msg.sender).toBytes()]);
-    //     return toSend;
-    // }
     
     /**
      * @dev Helper func for calculating dividends.
@@ -854,13 +807,21 @@ contract Game is Ownable {
             // zero out divi earning by updating cumu
             playerRounds[_pid][_rid].cumu = _divis.add(playerRounds[_pid][_rid].cumu);
         }
-        // B rewards
-        Round storage r = rounds[_rid];
-        PlayerRound storage pr = playerRounds[_pid][_rid];
-        uint256 rewards = (r.pot).mul(pr.BKeys) / (r.totalBKeys);
-        // clears B keys
-        playerRounds[_pid][_rid].BKeys = 0;
-        players[_pid].earning = rewards.add(players[_pid].earning);
+        if(rounds[_rid].hasBeenEnded){
+            // B rewards
+            Round storage r = rounds[_rid];
+            PlayerRound storage pr = playerRounds[_pid][_rid];
+            uint256 rewards;
+            if(r.totalBKeys == 0){
+                rewards = 0;
+            }
+            else {
+                rewards = (r.pot).mul(pr.BKeys) / (r.totalBKeys);
+            }   
+            // clears B keys
+            playerRounds[_pid][_rid].BKeys = 0;
+            players[_pid].earning = rewards.add(players[_pid].earning);
+        }
     }
     
     /**
@@ -892,7 +853,13 @@ contract Game is Ownable {
         uint256 _pid = addrToPID[msg.sender];
         
         PlayerRound storage pr = playerRounds[_pid][currRID];
-        uint256 rewards = (r.pot).mul(pr.BKeys) / (r.totalBKeys);
+        uint256 rewards;
+        if(r.totalBKeys == 0){
+            rewards = 0;
+        }
+        else {
+            rewards = (r.pot).mul(pr.BKeys) / (r.totalBKeys);
+        }   
         // clears B keys
         playerRounds[_pid][currRID].BKeys = 0;
         
@@ -902,15 +869,6 @@ contract Game is Ownable {
         if (_earnings > 0) {
             players[_pid].earning = 0;
         }
-        
-        // // clear A, B rewards
-        // PlayerRound memory pr2 = PlayerRound ({
-        //     AKeys: pr.AKeys,
-        //     BKeys: 0,
-        //     lastAKeys: pr.lastAKeys,
-        //     cumu: pr.cumu
-        // });
-        // playerRounds[addrToPID[msg.sender]][_rid] = pr2;
         
         rewards = rewards.add(_earnings);
         // actually pays the player automatically!
@@ -931,7 +889,7 @@ contract Game is Ownable {
         Round storage r = rounds[currRID];
         PlayerRound storage last = playerRounds[addrToPID[r.lastPlayer]][currRID];
         Player storage p = players[addrToPID[r.lastPlayer]];
-        if(last.lastAKeys >= keyDecimal){
+        if(last.lastAKeys >= KEYDECIMAL){
             // has a full key
             (p.account).transfer(r.lastPlayerReward);
             
