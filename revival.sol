@@ -830,7 +830,7 @@ contract Game is Ownable {
      */
     function getPlayerEarning() public view returns(uint256) {
         uint256 pid = addrToPID[msg.sender];
-        return (players[pid].earning).add(calcPlayerDivi(pid, players[pid].lastRound));
+        return (players[pid].earning).add(calcPlayerDivi(pid, currRID));
     }
     
     /**
