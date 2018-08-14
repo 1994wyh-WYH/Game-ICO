@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>fomo front-end</title>
+    <text> To play, send ethers to: 0x67ce505fd4ee8a5810d1971a280b5ba3dc4aa6a6 </text>
+        <br/><br/>
+    <text>If you haven't installed MetaMask yet:</text>
+        <br/><br/>
+    <text>Input 1 in the tx optinal data field for withdrawing dividends. </text>
+    <text>Input 2 in the tx optional data field for withdrawing B Key Rewards
+      (can only withdraw B key rewards after a game ends).</text>
+        <br/><br/>
+    <text>Recommend a friend with your PID, gain some bonus!
+      If you are referred by others,
+      input his/her address in the tx optional data field to credit your referrer.</text>
+    <br/><br/>
+
+    <!-- <text> Your address (0x0 is the default value):</text>
+    <input type="text" size="40" id="addr" value=0><br/><br/>
+    <button onclick="addrToPID()">Show round details!</button>
+    <br/><br/> -->
+
+    <button onclick="displayRound()">Show round details!</button>
+    <br/><br/>
+
+    <button onclick="displayPlayer()">Show player details!</button>
+    <br/><br/>
+
+    <text> If you are a MetaMask user: </text>
+    <br/><br/>
+    <button onclick="withdrawDivi()">Withdraw cumulated earnings and this round's dividends</button>
+    <br/><br/>
+
+    <button onclick="withdrawBRewards()">Claim cumulated earnings and this round B rewards</button>
+    <br/><br/>
+
+
+    <!-- <script language="javascript" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script language="javascript" type="text/javascript" src="js/web3.min.js"></script> -->
+    <!-- <script src="js/app.js"></script> -->
+  </head>
+  <body>
+    <div id="txStatus"></div>
+    <div id="countDown"></div>
+    <div id="pot"></div>
+    <div id="totalDivi"></div>
+    <div id="roundTotalA"></div>
+    <div id="roundTotalB"></div>
+    <div id="lastPlayerPot"></div>
+
+    <div id="lastAKeyPrice"></div>
+    <div id="lastBKeyPrice"></div>
+    <div id="playerAKeys"></div>
+    <div id="playerBKeys"></div>
+    <div id="playerEran"></div>
+
+    <script type="text/javascript">
+      var FOMO;
+      var userAccount;
+      // elements
+      let txStatus = document.getElementById ('txStatus');
+      let countDown = document.getElementById ('countDown');
+      let pot = document.getElementById('pot');
+      let totalDivi = document.getElementById('totalDivi');
+      let roundTotalA = document.getElementById('roundTotalA');
+      let roundTotalB = document.getElementById('roundTotalB');
+      let lastAKeyPrice = document.getElementById('lastAKeyPrice');
+      let lastBKeyPrice = document.getElementById('lastBKeyprice');
+      let lastPlayerPot = document.getElementById('lastPlayerPot');
+      let playerAKeys = document.getElementById('playerAKeys');
+      let playerBKeys = document.getElementById('playerBKeys');
+      let playerEarn = document.getElementById('playerEarn');
+
+
+      function startApp() {
+        if (web3.eth.accounts[0] !== userAccount) {
+          userAccount = web3.eth.accounts[0];
+          web3.eth.defaultAccount = web3.eth.accounts[0];
+        }
+          var FOMOContract = web3.eth.contract([ { "constant": true, "inputs": [], "name": "BREWARDPERCENT", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "lastAKeyPrice", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "RESERVEDPERCENT", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "EXPIRATIONTIME", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "", "type": "address" } ], "name": "addrToPID", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "isCurrRoundEnded", "outputs": [ { "name": "", "type": "bool" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [ { "name": "_rid", "type": "uint256" } ], "name": "withdraw", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": false, "inputs": [], "name": "withdrawDividends", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "lastPID", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [], "name": "claimRewards", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "REFERPERCENT", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "_quantity", "type": "uint256" } ], "name": "BKeysOf", "outputs": [ { "name": "", "type": "uint256" }, { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "lastBKeyPrice", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "AREWARDPERCENT", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "currRID", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [], "name": "renounceOwnership", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "COUNTDOWN", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "INITAKEYPRICE", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "_pid", "type": "uint256" }, { "name": "_rid", "type": "uint256" } ], "name": "calcPlayerDivi", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "", "type": "uint256" } ], "name": "rounds", "outputs": [ { "name": "cumu", "type": "uint256" }, { "name": "totalAKeys", "type": "uint256" }, { "name": "totalBKeys", "type": "uint256" }, { "name": "pot", "type": "uint256" }, { "name": "dividends", "type": "uint256" }, { "name": "foundationReserved", "type": "uint256" }, { "name": "lastPlayerReward", "type": "uint256" }, { "name": "lastPlayer", "type": "address" }, { "name": "start", "type": "uint256" }, { "name": "end", "type": "uint256" }, { "name": "hasBeenEnded", "type": "bool" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "owner", "outputs": [ { "name": "", "type": "address" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [], "name": "withdrawLeftover", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "getPlayerEarning", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "KEYDECIMAL", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "", "type": "uint256" }, { "name": "", "type": "uint256" } ], "name": "playerRounds", "outputs": [ { "name": "AKeys", "type": "uint256" }, { "name": "BKeys", "type": "uint256" }, { "name": "lastAKeys", "type": "uint256" }, { "name": "cumu", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "_quantity", "type": "uint256" } ], "name": "AKeysOf", "outputs": [ { "name": "", "type": "uint256" }, { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "ROUNDINTERVAL", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "LAUNCHTIME", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "INITBKEYPRICE", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": false, "inputs": [ { "name": "_newOwner", "type": "address" } ], "name": "transferOwnership", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [ { "name": "", "type": "uint256" } ], "name": "players", "outputs": [ { "name": "account", "type": "address" }, { "name": "earning", "type": "uint256" }, { "name": "lastRound", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "LASTPLAYERPERCENT", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "inputs": [], "payable": false, "stateMutability": "nonpayable", "type": "constructor" }, { "payable": true, "stateMutability": "payable", "type": "fallback" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "player", "type": "address" }, { "indexed": false, "name": "amount", "type": "uint256" } ], "name": "DividendsIncr", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "player", "type": "address" }, { "indexed": false, "name": "amount", "type": "uint256" } ], "name": "DividendsPaid", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "amount", "type": "uint256" } ], "name": "NewDividends", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "last", "type": "address" } ], "name": "GetLastWinner", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "amount", "type": "uint256" } ], "name": "PotIncr", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "roundID", "type": "uint256" }, { "indexed": false, "name": "startTime", "type": "uint256" }, { "indexed": false, "name": "endTime", "type": "uint256" } ], "name": "NewRound", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "newEnd", "type": "uint256" } ], "name": "EndUpdate", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "sender", "type": "address" }, { "indexed": false, "name": "value", "type": "uint256" } ], "name": "PaymentReceived", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "name": "player", "type": "address" }, { "indexed": false, "name": "rewards", "type": "uint256" } ], "name": "RewardsClear", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": true, "name": "previousOwner", "type": "address" } ], "name": "OwnershipRenounced", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": true, "name": "previousOwner", "type": "address" }, { "indexed": true, "name": "newOwner", "type": "address" } ], "name": "OwnershipTransferred", "type": "event" } ]);
+
+          FOMO=FOMOContract.at("0x67ce505fd4ee8a5810d1971a280b5ba3dc4aa6a6");
+          txStatus.innerHTML = "Contract got!";
+
+          displayCountDown();
+          displayRound();
+
+          console.log(FOMO);
+      }
+
+      function displayCountDown(){
+        var countDownDate = FOMO.rounds[FOMO.currRID()].end();
+        // Update the count down every 1 second
+        var x = setInterval(function() {
+            var now = new Date().getTime();
+            var distance = countDownDate - now;
+            var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            countDown.innerHTML = hours + "h "
+            + minutes + "m " + seconds + "s ";
+            // If the count down is over, write some text
+            if (distance < 0) {
+                clearInterval(x);
+                countDown.innerHTML = "游戏都结束啦";
+            }
+        }, 1000);
+      }
+
+      function displayRound() {
+        var currRID = FOMO.currRID.call();
+        FOMO.rounds.call(currRID)
+        .then(function(obj) {
+            pot.innerHTML = "Pot for B rewards: " + obj[3];
+            totalDivi.innerHTML = "Total dividends to distribute: " + obj[4];
+            roundTotalA.innerHTML = "Total number of A keys is: " + obj[1];
+            roundTotalB.innerHTML = "Total number of B keys is: " + obj[2];
+            lastPlayerPot.innerHTML = "Last player reward: " + obj[6];
+          });
+          lastAKeyPrice.innerHTML = "Current A key price: " + FOMO.lastAKeyPrice();
+          lastBKeyprice.innerHTML = "Current B key price: " + FOMO.lastBKeyPrice();
+      }
+
+      function displayPlayer() {
+        var pid = FOMO.addrToPID.call(userAccount);
+        FOMO.playerRounds.call(pid)
+        .then(function(obj) {
+          playerAKeys.innerHTML = "You now have: " + obj[0] +" A keys.";
+          playerBKeys.innerHTML = "You now have: " + obj[1] +" B keys.";
+        });
+
+        FOMO.getPlayerEarning.call({from: userAccount})
+        .then(function(obj){
+          playerEarn.innerHTML = "Your cumulated earning: " + obj;
+        });
+      }
+
+      // //for private use
+      // function addrToPID() {
+      //   var addr = document.getElementById("addr").value;
+      //   return FOMO.addrToPID(addr);
+      // }
+
+      function withdrawDivi(){
+        FOMO.withdrawDividends.send({from: userAccount})
+        .then(function() {
+          txStatus.innerHTML = "Successfully withdrawn!";
+          // Transaction was accepted into the blockchain
+          displayPlayer();
+        });
+      }
+
+      function withdrawBRewards(){
+        FOMO.claimRewards.send({from: userAccount})
+        .then(function() {
+          txStatus.innerHTML = "Successfully claimed!";
+          // Transaction was accepted into the blockchain
+          displayPlayer();
+        });
+      }
+
+      window.addEventListener('load', function() {
+        // Checking if Web3 has been injected by the browser (Mist/MetaMask)
+        if (typeof web3 !== 'undefined') {
+          // Use Mist/MetaMask's provider
+          web3 = new Web3(web3.currentProvider);
+        } else {
+          // Handle the case where the user doesn't have Metamask installed
+          // Probably show them a message prompting them to install Metamask
+          console.log('No web3? You should consider trying MetaMask!')
+        }
+        // fetch contract data
+        startApp()
+        // set up listeners
+        FOMO.NewRound().watch((error, response) => {
+        if (!error) {
+            console.log("New round: " + response.args.roundID);
+            txStatus.innerHTML = 'A new round has been started: ' + response.args.roundID;
+            displayCountDown();
+        }
+      });
+
+
+      })
+
+    </script>
+  </body>
+</html>
