@@ -379,8 +379,9 @@ contract Game is Ownable {
      * @dev only allow withdraw after a round has ended.
      */
     function withdraw(uint256 _rid) public hasLaunched {
-        require(rounds[_rid].hasBeenEnded);
+        require(rounds[_rid].hasBeenEnded && rounds[_rid].foundationReserved > 0);
         uint256 toWithdraw = rounds[_rid].foundationReserved > address(this).balance ? address(this).balance : rounds[_rid].foundationReserved;
+        rounds[_rid].foundationReserved = 0;
         owner.transfer(toWithdraw); 
     }
     
@@ -634,27 +635,17 @@ contract Game is Ownable {
         returns (uint256, uint256) 
     {
         uint256 ret = 0;
-        // dynamic step for approx the result without exceeding gas limit
-        uint256 step = (_quantity/lastAKeyPrice)/10;
         uint256 price = lastAKeyPrice;
-        if(step < 1) {
-            step = 1;
-        }
-        uint256 rise = step.mul(18);
-        while(_quantity.sub(price.mul(step)) >= 1) {
-            _quantity = _quantity.sub(price.mul(step));
-            price = price.mul((100000).add(rise))/100000;
-            ret = ret.add(step);
+        while(_quantity.sub(price) >= 1) {
+            _quantity = _quantity.sub(price);
+            price = price.mul(100018)/100000;
+            ret = ret.add(1);
         }
         // if left money greater than half of the next key price,
         // count as 1
-        if(_quantity > price.mul(step)/2) {
-            ret = ret.add(step);
-            price = price.mul((100000).add(rise))/100000;
-        }
-        // no way to be lower than 1
-        if(ret < 1){
-            price = price.mul((100000).add(18))/100000;
+        if(_quantity > price/2) {
+            ret = ret.add(1);
+            price = price.mul(100018)/100000;
         }
         return (ret,price);
      }
@@ -671,27 +662,17 @@ contract Game is Ownable {
         returns (uint256, uint256) 
     {
         uint256 ret = 0;
-        // dynamic step for approx the result without exceeding gas limit
-        uint256 step = (_quantity/lastBKeyPrice)/8;
         uint256 price = lastBKeyPrice;
-        if(step < 1) {
-            step = 1;
-        }
-        uint256 fall = step.mul(18);
-        while(_quantity.sub(price.mul(step)) >= 1) {
-            _quantity = _quantity.sub(price.mul(step));
-            price = price.mul((100000).sub(fall))/100000; 
-            ret = ret.add(step);
+        while(_quantity.sub(price) >= 1) {
+            _quantity = _quantity.sub(price);
+            price = price.mul(99982)/100000; 
+            ret = ret.add(1);
         }
         // if left money greater than half of the next key price,
-        // count as 1        
-        if(_quantity > price.mul(step)/2) {
-            ret = ret.add(step);
-            price = price.mul((100000).sub(fall))/100000;
-        }
-        // no way to be lower than 1
-        if(ret < 1){
-            price = price.mul((100000).sub(18))/100000;
+        // count as 1
+        if(_quantity > price/2) {
+            ret = ret.add(1);
+            price = price.mul(99982)/100000;
         }
         return (ret,price);
      }
