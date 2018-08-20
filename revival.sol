@@ -631,21 +631,30 @@ contract Game is Ownable {
      function AKeysOf(uint256 _quantity) 
         public 
         view
-        hasLaunched 
         returns (uint256, uint256) 
     {
         uint256 ret = 0;
+        // dynamic step for approx the result without exceeding gas limit
+        uint256 step = (_quantity/lastAKeyPrice)/1000;
         uint256 price = lastAKeyPrice;
-        while(_quantity.sub(price) >= 1) {
-            _quantity = _quantity.sub(price);
-            price = price.mul(100018)/100000;
-            ret = ret.add(1);
+        if(step < 1) {
+            step = 1;
+        }
+        uint256 rise = step.mul(18);
+        while(_quantity.sub(price.mul(step)) >= 1) {
+            _quantity = _quantity.sub(price.mul(step));
+            price = price.mul((100000).add(rise))/(100000);
+            ret = ret.add(step);
         }
         // if left money greater than half of the next key price,
         // count as 1
-        if(_quantity > price/2) {
-            ret = ret.add(1);
-            price = price.mul(100018)/100000;
+        if(_quantity > price.mul(step)/2) {
+            ret = ret.add(step);
+            price = price.mul((100000).add(rise))/(100000);
+        }
+        // no way to be lower than 1
+        if(ret < 1){
+            price = price.mul((100000).add(18))/(100000);
         }
         return (ret,price);
      }
@@ -658,23 +667,25 @@ contract Game is Ownable {
      function BKeysOf(uint256 _quantity)    
         public 
         view
-        hasLaunched 
         returns (uint256, uint256) 
     {
-        uint256 ret = 0;
+        // constant key price for one purchase.
+        // avoid gas limit and zero price
+        uint256 ret = _quantity/lastBKeyPrice;
+        uint256 step = (_quantity/lastBKeyPrice)/100;
+        if(step < 1) {
+            step = 1;
+        }
         uint256 price = lastBKeyPrice;
-        while(_quantity.sub(price) >= 1) {
-            _quantity = _quantity.sub(price);
-            price = price.mul(99982)/100000; 
-            ret = ret.add(1);
+        uint256 fall = step.mul(18);
+        for(uint256 i=100; i>0; i--) {
+            price = (price.mul((100000).sub(fall)))/(100000);
+            if(price < 1) {
+                price = 1;
+                break;
+            }
         }
-        // if left money greater than half of the next key price,
-        // count as 1
-        if(_quantity > price/2) {
-            ret = ret.add(1);
-            price = price.mul(99982)/100000;
-        }
-        return (ret,price);
+        return (ret, price);
      }
          
     /**
